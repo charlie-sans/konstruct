@@ -15,7 +15,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     uefi_call_wrapper(SystemTable->ConOut->ClearScreen, 1, SystemTable->ConOut);
     
     // Print welcome message
-    Print(L"MyOS UEFI Bootloader\n\r");
+    Print(L"loading this goober Bootloader\n\r");
     Print(L"Loading kernel...\n\r");
 
     // Get handle to our own image
@@ -202,7 +202,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     }
     
     // Get memory map
-    Status = uefi_call_wrapper(
+    Status = uefi_call_wrapper( 
         SystemTable->BootServices->GetMemoryMap,
         5,
         &MemoryMapSize,

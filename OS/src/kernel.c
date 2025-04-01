@@ -1,4 +1,3 @@
-/* Minimal kernel for our OS with shell functionality */
 
 // Include our libc
 #include "libc/libc.h"
@@ -67,7 +66,7 @@ void kernel_main(void) {
     clear_screen();
     
     // Print a welcome message using our new libc functions
-    printf("Welcome to MyOS v0.1!\n");
+    printf("Welcome to Konstruct v0.1!\n");
     printf("This OS now includes a basic libc implementation.\n");
     printf("Type 'help' for available commands.\n\n");
     

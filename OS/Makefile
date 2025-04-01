@@ -5,10 +5,16 @@ CC = gcc
 AS = nasm
 LD = ld
 
+# Directories
+SRC_DIR = src
+MLIBC_DIR = ../MLibc
+MLIBC_SRC = $(MLIBC_DIR)/src
+MLIBC_INCLUDE = $(MLIBC_DIR)/include
+
 # Flags for legacy BIOS build
-CFLAGS_BIOS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -I.
-ASFLAGS_BIOS = -f elf32
-LDFLAGS_BIOS = -m elf_i386 -Tlinker.ld --oformat binary -static
+CFLAGS_BIOS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -I$(SRC_DIR) -I$(MLIBC_INCLUDE)
+ASFLAGS_BIOS = -f bin
+LDFLAGS_BIOS = -m elf_i386 -T linker.ld --oformat binary -static
 
 # Flags for UEFI build
 CFLAGS_UEFI = -fno-stack-protector -fshort-wchar -mno-red-zone -DEFI_FUNCTION_WRAPPER
@@ -19,10 +25,10 @@ UEFI_INCLUDES = -I/usr/include/efi -I/usr/include/efi/x86_64
 UEFI_LIBS = -lefi -lgnuefi
 
 # Source files
-BOOT_SRC = boot.asm
-KERNEL_SRC = kernel.c
-LIBC_SRC = libc/string.c libc/memory.c libc/stdio.c
-BOOTLOADER_SRC = bootloader.c
+BOOT_SRC = $(SRC_DIR)/boot.asm
+KERNEL_SRC = $(SRC_DIR)/kernel.c
+LIBC_SRC = $(MLIBC_SRC)/string.c $(MLIBC_SRC)/memory.c $(MLIBC_SRC)/stdio.c
+BOOTLOADER_SRC = $(SRC_DIR)/bootloader.c
 
 # Output files
 OS_IMAGE = myos.img
@@ -32,7 +38,7 @@ BOOTLOADER_EFI = bootloader.efi
 
 # Object files
 KERNEL_OBJ = kernel.o
-LIBC_OBJ = $(LIBC_SRC:.c=.o)
+LIBC_OBJS = $(LIBC_SRC:.c=.o)
 
 # Default target
 all: bios
@@ -41,27 +47,34 @@ all: bios
 bios: $(OS_IMAGE)
 
 $(OS_IMAGE): $(BOOT_BIN) $(KERNEL_BIN)
-	# Create a new blank disk image (1.44MB floppy)
+	@echo "Creating disk image..."
 	dd if=/dev/zero of=$(OS_IMAGE) bs=1024 count=1440
-	# Write the bootloader to the first sector
 	dd if=$(BOOT_BIN) of=$(OS_IMAGE) conv=notrunc
-	# Write the kernel starting at the second sector
 	dd if=$(KERNEL_BIN) of=$(OS_IMAGE) seek=1 conv=notrunc
+	@echo "Disk image created."
 
 $(BOOT_BIN): $(BOOT_SRC)
-	$(AS) -f bin $(BOOT_SRC) -o $(BOOT_BIN)
+	@echo "Assembling bootloader..."
+	$(AS) $(ASFLAGS_BIOS) $(BOOT_SRC) -o $(BOOT_BIN)
 
-$(KERNEL_BIN): $(KERNEL_OBJ) $(LIBC_OBJ)
-	$(LD) $(LDFLAGS_BIOS) -o $(KERNEL_BIN) $(KERNEL_OBJ) $(LIBC_OBJ)
+$(KERNEL_BIN): $(KERNEL_OBJ) $(LIBC_OBJS)
+	@echo "Linking kernel..."
+	$(LD) $(LDFLAGS_BIOS) -o $(KERNEL_BIN) $(KERNEL_OBJ) $(LIBC_OBJS)
 
 %.o: %.c
+	@echo "Compiling $<..."
 	$(CC) $(CFLAGS_BIOS) -c $< -o $@
 
 # UEFI boot target
 uefi: $(KERNEL_BIN) $(BOOTLOADER_EFI)
-	./create_uefi_image.sh
+	@echo "Creating UEFI image..."
+	mkdir -p uefi_image/EFI/BOOT
+	cp $(KERNEL_BIN) uefi_image/
+	cp $(BOOTLOADER_EFI) uefi_image/EFI/BOOT/BOOTX64.EFI
+	@echo "UEFI image created."
 
 $(BOOTLOADER_EFI): $(BOOTLOADER_SRC)
+	@echo "Building UEFI bootloader..."
 	$(CC) $(CFLAGS_UEFI) $(UEFI_INCLUDES) -c $(BOOTLOADER_SRC) -o bootloader.o
 	$(LD) $(LDFLAGS_UEFI) -o $(BOOTLOADER_EFI) bootloader.o $(UEFI_LIBS)
 
@@ -73,5 +86,8 @@ run-uefi: uefi
 	qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd -drive file=fat:rw:uefi_image,format=raw
 
 clean:
-	rm -f *.o libc/*.o *.bin *.img *.efi
+	@echo "Cleaning..."
+	rm -f $(SRC_DIR)/*.o $(MLIBC_SRC)/*.o *.o *.bin *.img *.efi
 	rm -rf uefi_image
+
+.PHONY: all bios uefi run-bios run-uefi clean
