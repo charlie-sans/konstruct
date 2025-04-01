@@ -9,19 +9,22 @@ SECTIONS
     }
 
     .text : {
-        *(.text)
+        *(.text*)
     }
 
     .rodata : {
-        *(.rodata)
+        *(.rodata*)
     }
 
     .data : {
-        *(.data)
+        *(.data*)
     }
 
     .bss : {
-        *(.bss)
+        *(.bss*)
         *(COMMON)
     }
+
+    _end = .; /* End of statically allocated memory */
+    _heap_end = 0x200000; /* End of heap (adjust as needed) */
 }

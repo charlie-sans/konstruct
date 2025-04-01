@@ -16,6 +16,9 @@ void* memcpy(void* dest, const void* src, size_t n);
 void* memset(void* s, int c, size_t n);
 void* malloc(size_t size);
 void free(void* ptr);
+void* realloc(void* ptr, size_t size);
+size_t malloc_usable_size(void* ptr);
+char* memory_to_str(void* ptr, size_t size, char* buffer, size_t buffer_size);
 
 // String functions
 size_t strlen(const char* str);
@@ -28,6 +31,10 @@ char* strchr(const char* s, int c);
 char* strstr(const char* haystack, const char* needle);
 char* strncat(char* dest, const char* src, size_t n);
 char* strrchr(const char* s, int c);
+char* strdup(const char* str);
+char* strtok(char* str, const char* delim);
+size_t strspn(const char* str, const char* accept);
+size_t strcspn(const char* str, const char* reject);
 
 // Shell program entry point
 void shell_main(void);
@@ -38,6 +45,7 @@ int puts(const char* s);
 int printf(const char* format, ...);
 int sprintf(char* str, const char* format, ...);
 int snprintf(char* str, size_t size, const char* format, ...);
+int vprintf(const char* format, va_list args);
 char getchar(void);
 char* gets(char* str);
 
@@ -49,5 +57,8 @@ char* itoa(int value, char* str, int base);
 int abs(int x);
 double pow(double base, double exp);
 double sqrt(double x);
+
+// Keyboard input functions
+char scancode_to_ascii(unsigned char scancode);
 
 #endif /* LIBC_H */

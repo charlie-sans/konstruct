@@ -4,6 +4,20 @@
 #include "stdint.h"
 #include "stddef.h"
 
+// BMP file format constants
+#define BMP_SIGNATURE      0x4D42   // 'BM' in little-endian
+#define BMP_HEADER_SIZE    14      // File header size
+#define BMP_INFO_SIZE      40      // Info header size
+#define BMP_COMPRESSION_BI_RGB 0   // No compression
+
+// BMP Color formats
+#define BMP_1BPP           1       // 1 bit per pixel
+#define BMP_4BPP           4       // 4 bits per pixel
+#define BMP_8BPP           8       // 8 bits per pixel
+#define BMP_16BPP          16      // 16 bits per pixel
+#define BMP_24BPP          24      // 24 bits per pixel
+#define BMP_32BPP          32      // 32 bits per pixel
+
 // BMP file header structure
 typedef struct {
     uint16_t signature;      // BMP signature, must be 'BM'
@@ -109,6 +123,66 @@ int font_from_bmp(const uint8_t* bmp_data, Font* font_out);
  */
 int font_get_pixel(const Font* font, char c, int x, int y);
 
+// Function prototypes for BMP handling
+
+/**
+ * Check if the data represents a valid BMP file
+ * 
+ * @param data Pointer to the BMP data
+ * @param size Size of the data in bytes
+ * @return 1 if valid BMP, 0 otherwise
+ */
+int bmp_is_valid(const uint8_t* data, size_t size);
+
+/**
+ * Get the width of a BMP image
+ * 
+ * @param data Pointer to the BMP data
+ * @return Width of the image in pixels, or 0 if invalid
+ */
+int bmp_get_width(const uint8_t* data);
+
+/**
+ * Get the height of a BMP image
+ * 
+ * @param data Pointer to the BMP data
+ * @return Height of the image in pixels, or 0 if invalid
+ */
+int bmp_get_height(const uint8_t* data);
+
+/**
+ * Get the bits per pixel of a BMP image
+ * 
+ * @param data Pointer to the BMP data
+ * @return Bits per pixel (1, 4, 8, 16, 24, or 32), or 0 if invalid
+ */
+int bmp_get_bpp(const uint8_t* data);
+
+/**
+ * Get a pixel value from a BMP image
+ * 
+ * @param data Pointer to the BMP data
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @return Pixel value (color index or RGB value)
+ */
+uint32_t bmp_get_pixel(const uint8_t* data, int x, int y);
+
+/**
+ * Create a font from a BMP image
+ * 
+ * @param bmp_data Pointer to the BMP data
+ * @param char_width Width of each character in pixels
+ * @param char_height Height of each character in pixels
+ * @param first_char First character in the font
+ * @param chars_per_row Number of characters per row in the BMP
+ * @param out_data Pointer to output buffer for font data
+ * @param out_size Size of output buffer
+ * @return Pointer to new Font structure, or NULL if failed
+ */
+Font* bmp_to_font(const uint8_t* bmp_data, int char_width, int char_height, 
+                 char first_char, int chars_per_row, uint8_t* out_data, size_t out_size);
+
 // Example of including a font directly in the executable
 // This would typically be defined in a .c file
 #ifdef FONT_IMPLEMENTATION
@@ -120,8 +194,8 @@ const uint8_t default_font_data[] = {
     0x18, 0x3C, 0x3C, 0x18, 0x18, 0x00, 0x18, 0x00,
     // " (34) - 8x8 bitmap
     0x6C, 0x6C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    // ... and so on for all characters from 32 to 127
-    // This would be replaced with actual font data
+
+
 };
 
 const Font default_font = {
