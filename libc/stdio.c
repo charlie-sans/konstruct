@@ -207,3 +207,157 @@ char* itoa(int value, char* str, int base) {
     
     return original_str;
 }
+
+
+//sprintf implementation
+int sprintf(char* str, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    
+    int printed = 0;
+    char* original_str = str;
+    
+    while (*format) {
+        if (*format == '%') {
+            format++;
+            switch (*format) {
+                case 'd': {
+                    int val = va_arg(args, int);
+                    char buf[32];
+                    itoa(val, buf, 10);
+                    char* s = buf;
+                    while (*s) {
+                        *str++ = *s++;
+                        printed++;
+                    }
+                    break;
+                }
+                case 'x': {
+                    int val = va_arg(args, int);
+                    char buf[32];
+                    itoa(val, buf, 16);
+                    char* s = buf;
+                    while (*s) {
+                        *str++ = *s++;
+                        printed++;
+                    }
+                    break;
+                }
+                case 's': {
+                    char* s = va_arg(args, char*);
+                    while (*s) {
+                        *str++ = *s++;
+                        printed++;
+                    }
+                    break;
+                }
+                case 'c': {
+                    char c = (char)va_arg(args, int);
+                    *str++ = c;
+                    printed++;
+                    break;
+                }
+                case '%': {
+                    *str++ = '%';
+                    printed++;
+                    break;
+                }
+                default:
+                    *str++ = '%';
+                    *str++ = *format;
+                    printed += 2;
+                    break;  
+            }
+        } else {
+            *str++ = *format;
+            printed++;
+        }
+        format++;
+    }
+    *str = '\0';  // Null-terminate the string
+
+    va_end(args);
+    return printed;
+}
+
+//snprintf implementation
+int snprintf(char* str, size_t size, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    
+    int printed = 0;
+    char* original_str = str;
+    
+    while (*format && printed < size - 1) {
+        if (*format == '%') {
+            format++;
+            switch (*format) {
+                case 'd': {
+                    int val = va_arg(args, int);
+                    char buf[32];
+                    itoa(val, buf, 10);
+                    char* s = buf;
+                    while (*s && printed < size - 1) {
+                        *str++ = *s++;
+                        printed++;
+                    }
+                    break;
+                }
+                case 'x': {
+                    int val = va_arg(args, int);
+                    char buf[32];
+                    itoa(val, buf, 16);
+                    char* s = buf;
+                    while (*s && printed < size - 1) {
+                        *str++ = *s++;
+                        printed++;
+                    }
+                    break;
+                }
+                case 's': {
+                    char* s = va_arg(args, char*);
+                    while (*s && printed < size - 1) {
+                        *str++ = *s++;
+                        printed++;
+                    }
+                    break;
+                }
+                case 'c': {
+                    char c = (char)va_arg(args, int);
+                    if (printed < size - 1) {
+                        *str++ = c;
+                        printed++;
+                    }
+                    break;
+                }
+                case '%': {
+                    if (printed < size - 1) {
+                        *str++ = '%';
+                        printed++;
+                    }
+                    break;
+                }
+                default:
+                    if (printed < size - 1) {
+                        *str++ = '%';
+                        printed++;
+                    }
+                    if (printed < size - 1) {
+                        *str++ = *format;
+                        printed++;
+                    }
+                    break;  
+            }
+        } else {
+            if (printed < size - 1) {
+                *str++ = *format;
+                printed++;
+            }
+        }
+        format++;
+    }
+    *str = '\0';  // Null-terminate the string
+
+    va_end(args);
+    return printed;
+}

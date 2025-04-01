@@ -36,6 +36,8 @@ void shell_main(void);
 int putchar(int c);
 int puts(const char* s);
 int printf(const char* format, ...);
+int sprintf(char* str, const char* format, ...);
+int snprintf(char* str, size_t size, const char* format, ...);
 char getchar(void);
 char* gets(char* str);
 

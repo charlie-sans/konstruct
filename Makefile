@@ -6,7 +6,7 @@ AS = nasm
 LD = ld
 
 # Flags for legacy BIOS build
-CFLAGS_BIOS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -I.
+CFLAGS_BIOS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -I. -g
 ASFLAGS_BIOS = -f elf32
 LDFLAGS_BIOS = -m elf_i386 -Tlinker.ld --oformat binary -static
 
@@ -14,7 +14,7 @@ LDFLAGS_BIOS = -m elf_i386 -Tlinker.ld --oformat binary -static
 CFLAGS_UEFI = -fno-stack-protector -fshort-wchar -mno-red-zone -DEFI_FUNCTION_WRAPPER
 LDFLAGS_UEFI = -shared -Bsymbolic -L/usr/lib -T uefi_linker.ld
 
-# UEFI includes and libraries
+# UEFI includes and librariesgdb kernel.bin
 UEFI_INCLUDES = -I/usr/include/efi -I/usr/include/efi/x86_64
 UEFI_LIBS = -lefi -lgnuefi
 
