@@ -37,7 +37,7 @@ BOOT_BIN = boot.bin
 BOOTLOADER_EFI = bootloader.efi
 
 # Object files
-KERNEL_OBJ = kernel.o
+KERNEL_OBJ = src/kernel.o
 LIBC_OBJS = $(LIBC_SRC:.c=.o)
 
 # Default target

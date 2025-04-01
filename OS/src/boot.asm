@@ -2,100 +2,252 @@
 [bits 16]
 [org 0x7c00]
 
-; Set up stack
-mov bp, 0x9000
-mov sp, bp
+; Start by jumping over the data section
+jmp boot_start
 
-; Store boot drive number that BIOS provides in DL
-mov [BOOT_DRIVE], dl
+; Constants and variables (keep these small)
+BOOT_DRIVE db 0
+MSG_LOADING db "Loading...", 13, 10, 0
+LOAD_ERR_MSG db "Load error: ", 0
+STAGE2_ADDR equ 0x7E00  ; Address where stage 2 will be loaded
 
-; Print a message
-mov si, MSG_REAL_MODE
-call print_string
+boot_start:
+    ; Set up segment registers
+    xor ax, ax
+    mov ds, ax
+    mov es, ax          ; Ensure ES is zero for proper memory addressing
+    
+    ; Set up stack
+    mov bp, 0x9000
+    mov sp, bp
 
-; Load the kernel
-call load_kernel
+    ; Store boot drive number that BIOS provides in DL
+    mov [BOOT_DRIVE], dl
 
-; Print success message
-mov si, KERNEL_LOADED_MSG
-call print_string
+    ; Print loading message
+    mov si, MSG_LOADING
+    call print_string
 
-; Switch to protected mode
-call switch_to_pm
+    ; Reset disk system first to ensure it's in a known state
+    xor ax, ax
+    mov dl, [BOOT_DRIVE]
+    int 0x13
+    jc disk_error
 
-; Print string function
-print_string:
-    ; Function implementation to print a null-terminated string
-    lodsb
-    or al, al
-    jz done
+    ; Load stage 2 to memory
+    mov bx, STAGE2_ADDR ; Destination address (ES:BX)
+    mov ah, 0x02      ; BIOS read function
+    mov al, 3         ; Read 3 sectors (larger second stage)
+    mov ch, 0         ; Cylinder 0
+    mov cl, 2         ; Sector 2 (right after boot sector)
+    mov dh, 0         ; Head 0
+    mov dl, [BOOT_DRIVE]  ; Drive number from BIOS
+    int 0x13
+    jc disk_error
+
+    ; Print a period to show stage 2 was loaded
+    mov ah, 0x0e
+    mov al, '.'
+    int 0x10
+
+    ; Jump to stage 2
+    jmp 0:STAGE2_ADDR   ; Far jump with explicit segment
+
+; Error handler - keep it minimal
+disk_error:
+    mov si, LOAD_ERR_MSG
+    call print_string
+    
+    ; Print error code
+    mov al, ah          ; Error code is in AH
+    add al, '0'         ; Convert to ASCII
     mov ah, 0x0e
     int 0x10
+    
+    jmp $               ; Hang
+
+; Simple print string routine
+print_string:
+    lodsb               ; Load byte at DS:SI into AL
+    or al, al           ; Test if character is zero (end of string)
+    jz done
+    mov ah, 0x0e        ; BIOS teletype function
+    int 0x10            ; Call BIOS to print character
     jmp print_string
 done:
     ret
 
-; Load kernel function
+; Boot sector padding
+times 510-($-$$) db 0
+dw 0xaa55
+
+; ----------------------- STAGE 2 STARTS HERE -----------------------
+; This code will be loaded at STAGE2_ADDR (0x7E00)
+stage2_start:
+    ; Make sure interrupts are disabled while we set up
+    cli
+    
+    ; Set up our own segment registers again (don't trust what was passed)
+    mov ax, 0
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    
+    ; Set up a new stack to be safe
+    mov bp, 0x9000
+    mov sp, bp
+    
+    ; Restore interrupts
+    sti
+    
+    ; Print stage 2 message - use direct BIOS calls to keep it simple
+    mov si, MSG_STAGE2
+    call print_string
+    
+    ; Try to print a simple character to check if we're still running
+    mov ah, 0x0e
+    mov al, '*'         ; Print a star as an alive indicator
+    int 0x10
+
+    ; Load the kernel
+    call load_kernel
+    
+    ; Print success message
+    mov si, KERNEL_LOADED_MSG
+    call print_string
+
+    ; Switch to protected mode
+    call switch_to_pm
+
+; Stage 2 data
+MSG_STAGE2 db "Stage 2!", 13, 10, 0
+MSG_REAL_MODE db "16-bit mode", 13, 10, 0
+RESET_ERROR_MSG db "Reset error! Code: ", 0
+SECTORS_ERROR_MSG db "Sector error!", 13, 10, 0
+LOAD_KERNEL_MSG db "Loading kernel...", 13, 10, 0
+KERNEL_LOADED_MSG db "Kernel loaded!", 13, 10, 0
+HANG_MSG db "-System halted", 13, 10, 0
+KERNEL_OFFSET equ 0x100000  ; Final location of kernel (1MB mark)
+
+; Print hex value in DX - moved to stage 2
+print_hex:
+    pusha
+    mov cx, 4       ; 4 hex digits (16 bits)
+hex_loop:
+    dec cx          ; Start from most significant digit
+    mov ax, dx      ; Copy DX to AX
+    shr ax, cl      ; Shift right to isolate current digit
+    shr ax, cl
+    shr ax, cl
+    shr ax, cl
+    and ax, 0xf     ; Mask out all but the lower 4 bits
+    
+    ; Convert to ASCII
+    add al, '0'     ; Add '0' to convert to ASCII
+    cmp al, '9'     ; If greater than '9', add additional 7 to get to 'A'-'F'
+    jle hex_print
+    add al, 7       ; 'A' is ASCII 65, '9' is 57, so 65-57 = 8, but we subtract 1
+hex_print:
+    mov ah, 0x0e    ; BIOS teletype function
+    int 0x10        ; Print character in AL
+    
+    test cx, cx     ; Check if we're done
+    jnz hex_loop
+    
+    popa
+    ret
+
+; Load kernel function - now in stage 2
 load_kernel:
-    ; Code to load kernel from disk to memory
+    ; Print message
     mov si, LOAD_KERNEL_MSG
     call print_string
     
-    mov bx, KERNEL_OFFSET  ; Destination address
-    mov dh, 15             ; Number of sectors to read
-    mov dl, [BOOT_DRIVE]   ; Drive to read from
-    call disk_load
+    ; Reset disk system first
+    xor ax, ax        ; AH = 0 (reset disk system)
+    mov dl, [BOOT_DRIVE]
+    int 0x13
+    jc reset_error
+    
+    ; We'll use a simpler approach to load the kernel
+    ; Load directly to a lower address, we'll copy it later
+    xor ax, ax
+    mov es, ax        ; Ensure ES is 0
+    mov bx, 0x8000    ; Temporary buffer at 0x8000
+    
+    ; Read kernel sectors
+    mov ah, 0x02      ; BIOS read function
+    mov al, 10        ; Read 10 sectors at a time (improved speed)
+    mov ch, 0         ; Cylinder 0
+    mov cl, 5         ; Sector 5 (after boot sector & stage 2)
+    mov dh, 0         ; Head 0
+    mov dl, [BOOT_DRIVE]
+    int 0x13          ; BIOS interrupt
+    jc disk_read_error
+    
+    ; Print a progress indicator
+    mov ah, 0x0e
+    mov al, '+'
+    int 0x10
+    
+    ; Read remaining sectors if needed
+    mov bx, 0x8000 + (10 * 512) ; Next buffer position
+    mov ah, 0x02
+    mov al, 10        ; Read another 10 sectors
+    mov cl, 15        ; Start from sector 15
+    int 0x13
+    jc disk_read_error
+    
+    ; Print progress
+    mov ah, 0x0e
+    mov al, '+'
+    int 0x10
+    
+    ; Read final batch of sectors
+    mov bx, 0x8000 + (20 * 512) ; Next buffer position
+    mov ah, 0x02
+    mov al, 10        ; Read final 10 sectors
+    mov cl, 25        ; Start from sector 25
+    int 0x13
+    jc disk_read_error
+    
+    ; Print progress completed
+    mov ah, 0x0e
+    mov al, '#'
+    int 0x10
+    
     ret
 
-; Add disk_load function
-disk_load:
-    push dx         ; Store DX on stack to check against total sectors read
-    
-    mov ah, 0x02    ; BIOS read sector function
-    mov al, dh      ; Read DH sectors
-    mov ch, 0x00    ; Select cylinder 0
-    mov dh, 0x00    ; Select head 0
-    mov cl, 0x02    ; Start reading from second sector (after boot sector)
-    
-    int 0x13        ; BIOS interrupt
-    
-    jc disk_error   ; Jump if error (carry flag set)
-    
-    pop dx          ; Restore DX from the stack
-    cmp dh, al      ; If AL (sectors read) != DH (sectors expected)
-    jne sectors_error  ; Display error
-    ret
-    
-disk_error:
-    mov si, DISK_ERROR_MSG
+reset_error:
+    mov si, RESET_ERROR_MSG
     call print_string
-    
-    ; Print error code
-    mov ah, 0
-    mov al, ah      ; Error code in AH after int 0x13
-    add al, '0'     ; Convert to ASCII
+    mov al, ah        ; Error code in AH
+    add al, '0'
+    mov ah, 0x0e
+    int 0x10
+    jmp hang_system
+
+disk_read_error:
+    mov si, SECTORS_ERROR_MSG
+    call print_string
+    mov al, ah        ; Error code in AH
+    add al, '0'
     mov ah, 0x0e
     int 0x10
     
-    jmp $           ; Hang
-
-sectors_error:
-    mov si, SECTORS_ERROR_MSG
+hang_system:
+    mov si, HANG_MSG
     call print_string
-    jmp $           ; Hang
+    jmp $             ; Infinite loop
 
-; GDT
+; GDT - now in stage 2
 gdt_start:
-
-gdt_null:           ; Null descriptor - required
-    dd 0x0          ; Double word (4 bytes) of zeros
-    dd 0x0
-
-gdt_code:           ; Code segment descriptor
-    ; Base=0x0, Limit=0xfffff
-    ; 1st flags: (present)1 (privilege)00 (descriptor type)1 -> 1001b
-    ; Type flags: (code)1 (conforming)0 (readable)1 (accessed)0 -> 1010b
-    ; 2nd flags: (granularity)1 (32-bit default)1 (64-bit seg)0 (AVL)0 -> 1100b
+    ; Null descriptor
+    dd 0x0, 0x0
+    
+    ; Code segment descriptor
     dw 0xffff       ; Limit (bits 0-15)
     dw 0x0          ; Base (bits 0-15)
     db 0x0          ; Base (bits 16-23)
@@ -103,16 +255,13 @@ gdt_code:           ; Code segment descriptor
     db 11001111b    ; 2nd flags, Limit (bits 16-19)
     db 0x0          ; Base (bits 24-31)
 
-gdt_data:           ; Data segment descriptor
-    ; Same as code segment except for type flags
-    ; Type flags: (code)0 (expand down)0 (writable)1 (accessed)0 -> 0010b
+    ; Data segment descriptor
     dw 0xffff       ; Limit (bits 0-15)
     dw 0x0          ; Base (bits 0-15)
     db 0x0          ; Base (bits 16-23)
     db 10010010b    ; 1st flags, type flags
     db 11001111b    ; 2nd flags, Limit (bits 16-19)
     db 0x0          ; Base (bits 24-31)
-
 gdt_end:
 
 ; GDT descriptor
@@ -121,8 +270,8 @@ gdt_descriptor:
     dd gdt_start                ; Address of GDT
 
 ; Segment selector constants
-CODE_SEG equ gdt_code - gdt_start
-DATA_SEG equ gdt_data - gdt_start
+CODE_SEG equ 8     ; 8 bytes from start of GDT
+DATA_SEG equ 16    ; 16 bytes from start of GDT
 
 ; Switch to protected mode function
 switch_to_pm:
@@ -157,19 +306,30 @@ init_pm:
 
 ; 32-bit protected mode code
 BEGIN_PM:
-    ; Load the kernel into memory
-    mov ebx, KERNEL_OFFSET  ; Point to the loaded kernel
-    jmp ebx                 ; Jump to the kernel
+    ; Debug - mark in video memory that we reached protected mode
+    mov byte [0xB8000], 'P'
+    mov byte [0xB8001], 0x0A  ; Green on black
+    
+    ; Copy kernel from temporary location to final destination
+    ; Source: 0x8000, Destination: 0x100000, Size: ~60KB (30 sectors)
+    mov esi, 0x8000         ; Source (after stage 2)
+    mov edi, 0x100000       ; Destination - kernel expects to be at 1MB mark
+    mov ecx, 3840           ; 30 sectors * 512 bytes / 4 = 3840 dwords
+    cld                     ; Make sure we're moving forward
+    rep movsd               ; Copy ECX dwords from ESI to EDI
+    
+    ; Debug - mark in video memory that kernel was copied
+    mov byte [0xB8002], 'K'
+    mov byte [0xB8003], 0x0A  ; Green on black
+    
+    ; Jump to kernel at its expected address
+    mov ebx, 0x100000       ; Kernel entry point at 1MB
+    call ebx                ; Call the kernel
+    
+    ; If kernel returns, show indicator and hang
+    mov byte [0xB8004], 'R'  ; 'R' for Returned
+    mov byte [0xB8005], 0x04 ; Red on black
+    
+    jmp $                   ; Hang if we ever return from kernel
 
-; Constants and variables
-MSG_REAL_MODE db "Started in 16-bit Real Mode", 13, 10, 0
-DISK_ERROR_MSG db "Disk read error! Error code: ", 0
-SECTORS_ERROR_MSG db "Incorrect number of sectors read!", 13, 10, 0
-LOAD_KERNEL_MSG db "Loading kernel into memory...", 13, 10, 0
-KERNEL_LOADED_MSG db "Kernel loaded successfully!", 13, 10, 0
-BOOT_DRIVE db 0
-KERNEL_OFFSET equ 0x1000
-
-; Boot sector padding
-times 510-($-$$) db 0
-dw 0xaa55
+; End of stage 2

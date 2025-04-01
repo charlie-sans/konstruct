@@ -1,6 +1,6 @@
 
 // Include our libc
-#include "libc/libc.h"
+#include "../../MLibc/src/libc.h"
 
 // Define a constant for the video memory address
 #define VIDEO_MEMORY 0xb8000
@@ -42,7 +42,9 @@ void add_to_history(const char* cmd);
 void navigate_history(int direction);
 void clear_command_line(void);
 void set_command_line(const char* cmd);
-
+// memcmp
+void* memcpy(void* dest, const void* src, size_t n);
+void* memset(void* s, int c, size_t n);
 // Global variables
 int cursor_x = 0;
 int cursor_y = 0;
@@ -57,6 +59,7 @@ int history_index = 0;        // Index where next command will be stored
 
 // Flag for extended key sequences
 int extended_key = 0;
+
 
 // Function attribute to ensure this is placed at the start of the binary
 __attribute__((section(".text.start")))

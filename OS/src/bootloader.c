@@ -42,7 +42,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         &gEfiSimpleFileSystemProtocolGuid,
         (void **)&FileSystem
     );
-    
+    Print(L"File system: %p\n", FileSystem);
     if (EFI_ERROR(Status)) {
         Print(L"Error getting file system: %r\n", Status);
         return Status;
@@ -125,7 +125,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"Error getting file info size: %r\n", Status);
         return Status;
     }
-    
+    Print(L"File info: %p\n", FileInfo);
     // Allocate memory for the kernel
     UINTN Pages = (FileInfo->FileSize + 0xFFF) / 0x1000;
     EFI_PHYSICAL_ADDRESS KernelAddress = 0x100000;  // 1MB mark
@@ -138,7 +138,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Pages,
         &KernelAddress
     );
-    
+    Print(L"Kernel address: %p\n", (void *)KernelAddress);
     if (EFI_ERROR(Status)) {
         Print(L"Error allocating memory for kernel: %r\n", Status);
         return Status;
@@ -159,7 +159,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"Error reading kernel file: %r\n", Status);
         return Status;
     }
-    
+    Print(L"Kernel loaded at: %p\n", (void *)KernelAddress);
     // Close the kernel file
     uefi_call_wrapper(KernelFile->Close, 1, KernelFile);
     
@@ -168,7 +168,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     
     // Get keyboard protocol for the shell
     EFI_SIMPLE_TEXT_INPUT_PROTOCOL *KeyboardProtocol = SystemTable->ConIn;
-    
+    Print(L"Keyboard protocol: %p\n", KeyboardProtocol);
     // Exit boot services
     UINTN MapKey = 0;
     UINTN MemoryMapSize = 0;
@@ -186,7 +186,7 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         &DescriptorSize,
         &DescriptorVersion
     );
-    
+    Print(L"Memory map size: %d\n", MemoryMapSize);
     // Allocate memory for memory map
     Status = uefi_call_wrapper(
         SystemTable->BootServices->AllocatePool,
@@ -195,12 +195,12 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         MemoryMapSize,
         (void **)&MemoryMap
     );
-    
+    Print(L"Memory map: %p\n", MemoryMap);
     if (EFI_ERROR(Status)) {
         Print(L"Error allocating memory for memory map: %r\n", Status);
         return Status;
     }
-    
+    Print(L"Memory map allocated: %p\n", MemoryMap);
     // Get memory map
     Status = uefi_call_wrapper( 
         SystemTable->BootServices->GetMemoryMap,
@@ -211,12 +211,12 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         &DescriptorSize,
         &DescriptorVersion
     );
-    
+    Print(L"Memory map: %p\n", MemoryMap);
     if (EFI_ERROR(Status)) {
         Print(L"Error getting memory map: %r\n", Status);
         return Status;
     }
-    
+    Print(L"Memory map size: %d\n", MemoryMapSize);
     // Exit boot services
     Status = uefi_call_wrapper(
         SystemTable->BootServices->ExitBootServices,
@@ -224,12 +224,12 @@ efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         ImageHandle,
         MapKey
     );
-    
+    Print(L"Exit boot services: %r\n", Status);
     if (EFI_ERROR(Status)) {
         Print(L"Error exiting boot services: %r\n", Status);
         return Status;
     }
-    
+    Print(L"Exiting boot services...\n\r");
     // Jump to kernel with keyboard protocol
     KernelMain kernel = (KernelMain)KernelAddress;
     kernel(KeyboardProtocol);

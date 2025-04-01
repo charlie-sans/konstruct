@@ -1,7 +1,7 @@
-OUTPUT_FILE_CONTENTS
+/* Linker script for OS kernel */
 SECTIONS
 {
-    . = 0x100000; /* Start of the kernel code */
+    . = 0x100000; /* Start of the kernel code at 1MB mark to match boot.asm */
     
     .text : {
         *(.text)          /* All .text sections from input files */
