@@ -5,9 +5,49 @@ extern void print_char(char c);
 extern char scancode_to_ascii(unsigned char scancode);
 extern unsigned char read_scan_code(void);
 
-// Helper function to handle ANSI escape codes
+// Function to apply ANSI effects programmatically
+static void apply_ansi_effect(char cmd, int* params, int param_count) {
+    switch (cmd) {
+        case 'm': // Set graphics mode (e.g., colors)
+            for (int i = 0; i <= param_count; i++) {
+                switch (params[i]) {
+                    case 0: // Reset all attributes
+                        // Reset colors to default
+                        // Example: reset terminal state variables
+                        break;
+                    case 30 ... 37: // Set foreground color
+                        // Apply foreground color change
+                        break;
+                    case 40 ... 47: // Set background color
+                        // Apply background color change
+                        break;
+                }
+            }
+            break;
+
+        case 'H': // Cursor position (CSI row;colH or CSI row;colf)
+        case 'f':
+            if (param_count >= 1 && param_count >= 2) {
+                // Move cursor to (params[0], params[1])
+                // Example: update cursor position in terminal state
+            }
+            break;
+
+        case 'J': // Clear screen (CSI nJ)
+            if (params[0] == 2) {
+                // Clear the entire screen
+                // Example: reset terminal buffer
+            }
+            break;
+
+        // Add more cases as needed for other ANSI commands
+        default:
+            break;
+    }
+}
+
+// Refactored helper function to handle ANSI escape codes
 static void handle_ansi_escape(const char* seq) {
-    // Parse the ANSI escape sequence and apply the corresponding action
     int params[8] = {0}; // Support up to 8 parameters
     int param_count = 0;
     const char* p = seq;
@@ -26,38 +66,7 @@ static void handle_ansi_escape(const char* seq) {
 
     // Handle the final command character
     char cmd = *p;
-    switch (cmd) {
-        case 'm': // Set graphics mode (e.g., colors)
-            for (int i = 0; i <= param_count; i++) {
-                switch (params[i]) {
-                    case 0: // Reset all attributes
-                        // Reset colors to default
-                        break;
-                    case 30 ... 37: // Set foreground color
-                        // Map params[i] to terminal foreground color
-                        break;
-                    case 40 ... 47: // Set background color
-                        // Map params[i] to terminal background color
-                        break;
-                }
-            }
-            break;
-
-        case 'H': // Cursor position (CSI row;colH or CSI row;colf)
-        case 'f':
-            if (param_count >= 1 && param_count >= 2) {
-                // Move cursor to (params[0], params[1])
-            }
-            break;
-
-        case 'J': // Clear screen (CSI nJ)
-            if (params[0] == 2) {
-                // Clear the entire screen
-            }
-            break;
-
-        // Add more cases as needed for other ANSI commands
-    }
+    apply_ansi_effect(cmd, params, param_count);
 }
 
 // Enhanced putchar to handle ANSI escape sequences

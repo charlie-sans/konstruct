@@ -156,6 +156,9 @@ void vga_terminal_set_color(uint8_t fg, uint8_t bg);
 void console_putchar(char c);
 void console_write(const char* str);
 
+// Function to update the hardware cursor position
+extern void update_cursor(int x, int y);
+
 // Global screen information
 extern vga_screen_t vga_screen;
 
