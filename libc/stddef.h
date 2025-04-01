@@ -10,7 +10,7 @@ typedef unsigned int size_t;
 typedef unsigned long time_t;
 
 /* ptrdiff_t is the signed version of size_t */
-typedef long ptrdiff_t;
+//typedef long ptrdiff_t;
 
 /* NULL pointer definition */
 #ifndef NULL

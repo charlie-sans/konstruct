@@ -62,7 +62,15 @@ void terminal_set_active_pane(terminal_pane_t* pane);
 
 // Terminal output functions
 void terminal_putchar(char c);
+
+/**
+ * Print a string to the terminal.
+ * Supports ANSI escape sequences for formatting and cursor control.
+ * 
+ * @param str The string to print.
+ */
 void terminal_print(const char* str);
+
 void terminal_println(const char* str);
 void terminal_printf(const char* format, ...);
 

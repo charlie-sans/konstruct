@@ -63,7 +63,7 @@ void terminal_clear_content(void) {
     printf("\033[2;1H"); // Move cursor to the content area
 }
 
-// ANSI escape code parser
+// Enhanced ANSI escape code parser
 static void terminal_handle_ansi(const char* seq) {
     int params[8] = {0}; // Support up to 8 parameters
     int param_count = 0;
@@ -116,7 +116,7 @@ static void terminal_handle_ansi(const char* seq) {
     }
 }
 
-// Print a string to the terminal
+// Updated terminal_print function to handle ANSI sequences
 void terminal_print(const char* str) {
     if (!str) return;
 
