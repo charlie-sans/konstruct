@@ -5,6 +5,20 @@ CC = gcc
 AS = nasm
 LD = ld
 
+# Detect macOS and set cross-compiler flags if needed
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    # On macOS, we need to use a cross-compiler for i386
+    CC = i386-elf-gcc
+    LD = i386-elf-ld
+    # If homebrew cross-compiler is not installed, show helpful message
+    ifeq ($(shell which $(CC)),)
+        $(warning "i386-elf-gcc not found. Please install using:")
+        $(warning "brew tap nativeos/i386-elf-toolchain")
+        $(warning "brew install i386-elf-binutils i386-elf-gcc")
+    endif
+endif
+
 # Flags for legacy BIOS build
 CFLAGS_BIOS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -I. -g
 ASFLAGS_BIOS = -f elf32
@@ -14,7 +28,7 @@ LDFLAGS_BIOS = -m elf_i386 -Tlinker.ld --oformat binary -static
 CFLAGS_UEFI = -fno-stack-protector -fshort-wchar -mno-red-zone -DEFI_FUNCTION_WRAPPER
 LDFLAGS_UEFI = -shared -Bsymbolic -L/usr/lib -T uefi_linker.ld
 
-# UEFI includes and librariesgdb kernel.bin
+# UEFI includes and libraries
 UEFI_INCLUDES = -I/usr/include/efi -I/usr/include/efi/x86_64
 UEFI_LIBS = -lefi -lgnuefi
 

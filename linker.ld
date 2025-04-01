@@ -4,11 +4,9 @@ SECTIONS
 {
     . = 0x1000;
     
-    .text.start : {
-        *(.text.start)
-    }
-    
+    /* For Linux/standard ELF systems */
     .text : {
+        *(.text.start)  /* Include the .text.start section inside .text */
         *(.text)
     }
     

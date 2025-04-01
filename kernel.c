@@ -124,6 +124,7 @@ unsigned char inb(unsigned short port) {
 
 void outb(unsigned short port, unsigned char data) {
     __asm__("out %%al, %%dx" : : "a" (data), "d" (port));
+    return;
 }
 
 // Add a command to history
@@ -201,7 +202,7 @@ void set_command_line(const char* cmd) {
     cmd_pos = strlen(cmd);
     
     // Display the command
-    print_string(cmd);
+    print_string_internal(cmd);
 }
 
 // Handle a command
@@ -288,8 +289,8 @@ void clear_screen(void) {
     update_cursor();
 }
 
-// Function to print a string
-void print_string(const char* string) {
+// Function to print a string - rename to avoid conflicts
+void print_string_internal(const char* string) {
     while(*string != 0) {
         print_char(*string);
         string++;
