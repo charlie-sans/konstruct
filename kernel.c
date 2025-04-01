@@ -3,6 +3,14 @@
 // Include our libc
 #include "libc/libc.h"
 
+// Multiboot header
+__attribute__((section(".multiboot")))
+const unsigned int multiboot_header[] = {
+    0x1BADB002, // Magic number
+    0x0,        // Flags (no video mode, no additional info)
+    -(0x1BADB002 + 0x0) // Checksum (magic + flags + checksum = 0)
+};
+
 // Define a constant for the video memory address
 #define VIDEO_MEMORY 0xb8000
 // Define colors
@@ -60,33 +68,13 @@ int history_index = 0;        // Index where next command will be stored
 // Flag for extended key sequences
 int extended_key = 0;
 
-// Function attribute to ensure this is placed at the start of the binary
-__attribute__((section(".text.start")))
 // Kernel main function
 void kernel_main(void) {
-    // Clear the screen
-    clear_screen();
-    
-    // Print a welcome message using our new libc functions
-    printf("Welcome to MyOS v0.1!\n");
-    printf("This OS now includes a basic libc implementation.\n");
-    printf("Type 'help' for available commands.\n\n");
-    
-    // Initialize the command buffer and history
-    memset(cmd_buffer, 0, CMD_BUFFER_SIZE);
-    for (int i = 0; i < HISTORY_SIZE; i++) {
-        memset(history[i], 0, CMD_BUFFER_SIZE);
-    }
-    
-    // Print the initial prompt
-    print_prompt();
+    // Print a welcome message
+    printf("Welcome to MyOS with GRUB!\n");
 
-    printf("Starting shell...\n");
-    shell_main();
-
-    printf("Shell exited. Returning to kernel.\n");
+    // Main loop
     while (1) {
-        // Halt the CPU
         __asm__("hlt");
     }
 }
