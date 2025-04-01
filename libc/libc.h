@@ -26,6 +26,11 @@ int strncmp(const char* s1, const char* s2, size_t n);
 char* strcat(char* dest, const char* src);
 char* strchr(const char* s, int c);
 char* strstr(const char* haystack, const char* needle);
+char* strncat(char* dest, const char* src, size_t n);
+char* strrchr(const char* s, int c);
+
+// Shell program entry point
+void shell_main(void);
 
 // Standard I/O functions
 int putchar(int c);
@@ -37,5 +42,10 @@ char* gets(char* str);
 // Conversion functions
 int atoi(const char* str);
 char* itoa(int value, char* str, int base);
+
+// Math functions
+int abs(int x);
+double pow(double base, double exp);
+double sqrt(double x);
 
 #endif /* LIBC_H */

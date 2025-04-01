@@ -89,29 +89,49 @@ int printf(const char* format, ...) {
 
 char getchar(void) {
     char scancode;
-    char c = 0;
     
     // Wait for a valid character
-    while (!c) {
+    while (1) {
         scancode = read_scan_code();
-        if (!(scancode & 0x80)) { // Make sure it's a key press, not release
-            c = scancode_to_ascii(scancode);
+        
+        // Check if it's a key press (not a key release)
+        if (!(scancode & 0x80)) {
+            // Special handling for the Enter key
+            if (scancode == 0x1C) {  // 0x1C is the scan code for Enter
+                putchar('\n');
+                return '\n';
+            }
+            
+            // Handle other printable characters
+            char c = scancode_to_ascii(scancode);
+            if (c) {
+                putchar(c);
+                return c;
+            }
         }
     }
-    
-    putchar(c); // Echo the character
-    return c;
 }
 
 char* gets(char* str) {
     char* original_str = str;
     char c;
     
-    while ((c = getchar()) != '\n' && c != '\r') {
+    while (1) {
+        c = getchar();
+        
+        // Handle Enter key
+        if (c == '\n' || c == '\r') {
+            break;
+        }
+        
         if (c == '\b') {
             // Handle backspace
             if (str > original_str) {
                 str--;
+                // Erase the character on screen
+                putchar('\b');
+                putchar(' ');
+                putchar('\b');
             }
         } else {
             *str++ = c;

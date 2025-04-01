@@ -19,7 +19,7 @@ UEFI_INCLUDES = -I/usr/include/efi -I/usr/include/efi/x86_64
 UEFI_LIBS = -lefi -lgnuefi
 
 # Automatically find all source files
-C_SRC = $(wildcard kernel.c libc/*.c drivers/*.c)
+C_SRC = $(wildcard kernel.c libc/*.c drivers/*.c programs/*.c)
 ASM_SRC = $(wildcard boot.asm)
 
 # Object files

@@ -43,6 +43,7 @@ void add_to_history(const char* cmd);
 void navigate_history(int direction);
 void clear_command_line(void);
 void set_command_line(const char* cmd);
+void shell_main(void);
 
 // Global variables
 int cursor_x = 0;
@@ -79,75 +80,14 @@ void kernel_main(void) {
     
     // Print the initial prompt
     print_prompt();
-    
-    // Main shell loop
+
+    printf("Starting shell...\n");
+    shell_main();
+
+    printf("Shell exited. Returning to kernel.\n");
     while (1) {
-        char scancode = read_scan_code();
-        
-        // Check if this is an extended key sequence
-        if (scancode == KEY_EXTENDED) {
-            extended_key = 1;
-            continue;
-        }
-        
-        // Make sure it's a key press, not a key release
-        if (scancode & 0x80) {
-            extended_key = 0;  // Reset extended key flag
-            continue;          // Skip key releases
-        }
-        
-        // Handle special keys
-        if (scancode == KEY_ENTER) {
-            putchar('\n');
-            cmd_buffer[cmd_pos] = '\0';  // Null terminate the command
-            
-            // Only add non-empty commands to history
-            if (cmd_pos > 0) {
-                add_to_history(cmd_buffer);
-            }
-            
-            handle_command();
-            cmd_pos = 0;  // Reset buffer position
-            history_position = -1;  // Reset history position
-            print_prompt();
-        } 
-        else if (scancode == KEY_BACKSPACE && cmd_pos > 0) {
-            cmd_pos--;
-            cursor_x--;
-            if (cursor_x < 0) {
-                cursor_x = SCREEN_WIDTH - 1;
-                cursor_y--;
-            }
-            // Print a space to clear the character
-            char* video_memory = (char*) VIDEO_MEMORY;
-            int offset = 2 * (cursor_y * SCREEN_WIDTH + cursor_x);
-            video_memory[offset] = ' ';
-            video_memory[offset + 1] = WHITE_ON_BLACK;
-            update_cursor();
-        }
-        else if (extended_key && scancode == KEY_UP) {
-            // Navigate history upward (older commands)
-            navigate_history(1);
-            extended_key = 0;
-        }
-        else if (extended_key && scancode == KEY_DOWN) {
-            // Navigate history downward (newer commands)
-            navigate_history(-1);
-            extended_key = 0;
-        }
-        else if (!extended_key) {  // Only process regular keys, not extended
-            // Convert scan code to ASCII and add to buffer if it's a printable character
-            char ascii = scancode_to_ascii(scancode);
-            if (ascii && cmd_pos < CMD_BUFFER_SIZE - 1) {
-                cmd_buffer[cmd_pos++] = ascii;
-                putchar(ascii);
-            }
-        }
-        
-        // Reset extended key flag if it was used
-        if (extended_key) {
-            extended_key = 0;
-        }
+        // Halt the CPU
+        __asm__("hlt");
     }
 }
 

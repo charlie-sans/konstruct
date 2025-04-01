@@ -50,11 +50,34 @@ char* strcat(char* dest, const char* src) {
     return original_dest;
 }
 
+char* strncat(char* dest, const char* src, size_t n) {
+    char* original_dest = dest;
+    while (*dest) {
+        dest++;
+    }
+    while (n-- && *src) {
+        *dest++ = *src++;
+    }
+    *dest = '\0';
+    return original_dest;
+}
+
 char* strchr(const char* s, int c) {
     while (*s && *s != c) {
         s++;
     }
     return (*s == c) ? (char*)s : NULL;
+}
+
+char* strrchr(const char* s, int c) {
+    const char* last = NULL;
+    while (*s) {
+        if (*s == c) {
+            last = s;
+        }
+        s++;
+    }
+    return (char*)last;
 }
 
 char* strstr(const char* haystack, const char* needle) {
