@@ -18,21 +18,22 @@ LDFLAGS_UEFI = -shared -Bsymbolic -L/usr/lib -T uefi_linker.ld
 UEFI_INCLUDES = -I/usr/include/efi -I/usr/include/efi/x86_64
 UEFI_LIBS = -lefi -lgnuefi
 
-# Source files
-BOOT_SRC = boot.asm
-KERNEL_SRC = kernel.c
-LIBC_SRC = libc/string.c libc/memory.c libc/stdio.c
-BOOTLOADER_SRC = bootloader.c
+# Automatically find all source files
+C_SRC = $(wildcard kernel.c libc/*.c drivers/*.c)
+ASM_SRC = $(wildcard boot.asm)
+
+# Object files
+C_OBJ = $(patsubst %.c, %.o, $(C_SRC))
+ASM_OBJ = $(patsubst %.asm, %.o, $(ASM_SRC))
+
+# Separate bootloader and kernel object files
+BOOT_BIN = boot.bin
+KERNEL_OBJ = $(filter-out boot.asm, $(C_OBJ))  # Exclude boot.asm from kernel objects
 
 # Output files
 OS_IMAGE = myos.img
 KERNEL_BIN = kernel.bin
-BOOT_BIN = boot.bin
 BOOTLOADER_EFI = bootloader.efi
-
-# Object files
-KERNEL_OBJ = kernel.o
-LIBC_OBJ = $(LIBC_SRC:.c=.o)
 
 # Default target
 all: bios
@@ -48,21 +49,24 @@ $(OS_IMAGE): $(BOOT_BIN) $(KERNEL_BIN)
 	# Write the kernel starting at the second sector
 	dd if=$(KERNEL_BIN) of=$(OS_IMAGE) seek=1 conv=notrunc
 
-$(BOOT_BIN): $(BOOT_SRC)
-	$(AS) -f bin $(BOOT_SRC) -o $(BOOT_BIN)
+$(BOOT_BIN): boot.asm
+	nasm -f bin boot.asm -o $(BOOT_BIN)
 
-$(KERNEL_BIN): $(KERNEL_OBJ) $(LIBC_OBJ)
-	$(LD) $(LDFLAGS_BIOS) -o $(KERNEL_BIN) $(KERNEL_OBJ) $(LIBC_OBJ)
+$(KERNEL_BIN): $(KERNEL_OBJ)
+	$(LD) $(LDFLAGS_BIOS) -o $(KERNEL_BIN) $(KERNEL_OBJ)
 
 %.o: %.c
 	$(CC) $(CFLAGS_BIOS) -c $< -o $@
+
+%.o: %.asm
+	$(AS) $(ASFLAGS_BIOS) $< -o $@
 
 # UEFI boot target
 uefi: $(KERNEL_BIN) $(BOOTLOADER_EFI)
 	./create_uefi_image.sh
 
-$(BOOTLOADER_EFI): $(BOOTLOADER_SRC)
-	$(CC) $(CFLAGS_UEFI) $(UEFI_INCLUDES) -c $(BOOTLOADER_SRC) -o bootloader.o
+$(BOOTLOADER_EFI): bootloader.c
+	$(CC) $(CFLAGS_UEFI) $(UEFI_INCLUDES) -c bootloader.c -o bootloader.o
 	$(LD) $(LDFLAGS_UEFI) -o $(BOOTLOADER_EFI) bootloader.o $(UEFI_LIBS)
 
 # Run targets
@@ -73,5 +77,5 @@ run-uefi: uefi
 	qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd -drive file=fat:rw:uefi_image,format=raw
 
 clean:
-	rm -f *.o libc/*.o *.bin *.img *.efi
+	rm -f *.o libc/*.o drivers/*.o *.bin *.img *.efi
 	rm -rf uefi_image

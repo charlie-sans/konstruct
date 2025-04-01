@@ -1,0 +1,25 @@
+# Ignore build artifacts
+*.o
+*.bin
+*.img
+*.iso
+*.efi
+
+# Ignore temporary files
+*.tmp
+*.log
+*.swp
+*.swo
+*.bak
+
+# Ignore directories
+uefi_image/
+iso/
+
+# Ignore editor/IDE specific files
+.vscode/
+*.code-workspace
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
