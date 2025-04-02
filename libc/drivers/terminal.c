@@ -1,6 +1,6 @@
 #include "terminal.h"
-#include "../libc/libc.h"
-#include "../fs/fs.h"
+#include <libc.h>
+#include <fs/fs.h>
 
 // External functions from kernel.c
 extern void update_cursor(int x, int y);
@@ -28,11 +28,16 @@ void terminal_init(void) {
     // Set default theme
     terminal_set_theme(&THEME_DEFAULT);
 
+    // Set default color attribute
+
+
     // Clear the screen
-    printf("\033[2J"); // ANSI escape code to clear the screen
+    terminal_clear_content();
 
     // Move cursor to the top-left corner
-    printf("\033[H");
+    terminal.active_pane->buffer->cursor_x = 0;
+    terminal.active_pane->buffer->cursor_y = 0;
+    update_cursor(terminal.active_pane->buffer->cursor_x, terminal.active_pane->buffer->cursor_y);
 
     // Print the header and footer
     terminal_draw_header();
@@ -41,26 +46,29 @@ void terminal_init(void) {
 
 // Draw the terminal header
 void terminal_draw_header(void) {
-    printf("\033[1;1H"); // Move cursor to the top-left corner
-    printf("\033[48;5;%dm\033[38;5;%dm", terminal.theme.header_bg, terminal.theme.header_fg); // Set header colors
-    printf(" MyOS Terminal - Welcome! "); // Example header text
-    printf("\033[0m"); // Reset colors
+    // Implementation for drawing header (if applicable)
 }
 
 // Draw the terminal footer
 void terminal_draw_footer(void) {
-    printf("\033[25;1H"); // Move cursor to the bottom-left corner
-    printf("\033[48;5;%dm\033[38;5;%dm", terminal.theme.header_bg, terminal.theme.header_fg); // Set footer colors
-    printf(" [F1] Help | [F2] Menu | [F3] Theme | [F4] Clear "); // Example footer text
-    printf("\033[0m"); // Reset colors
+    // Implementation for drawing footer (if applicable)
 }
 
 // Clear the terminal content area
 void terminal_clear_content(void) {
-    printf("\033[2J"); // Clear the screen
-    terminal_draw_header();
-    terminal_draw_footer();
-    printf("\033[2;1H"); // Move cursor to the content area
+    char* video_memory = (char*)0xB8000;
+    uint8_t attribute = (terminal.theme.background << 4) | (terminal.theme.foreground & 0x0F);
+
+    // Clear the entire screen
+    for (int i = 0; i < 80 * 25 * 2; i += 2) {
+        video_memory[i] = ' ';
+        video_memory[i + 1] = attribute;
+    }
+
+    // Reset cursor position
+    terminal.active_pane->buffer->cursor_x = 0;
+    terminal.active_pane->buffer->cursor_y = 0;
+    update_cursor(0, 0);
 }
 
 // Enhanced ANSI escape code parser
@@ -112,7 +120,7 @@ static void terminal_handle_ansi(const char* seq) {
             }
             break;
 
-        // Add more cases as needed for other ANSI commands
+
     }
 }
 
@@ -148,6 +156,11 @@ void terminal_print(const char* str) {
 
 // Print a single character to the terminal
 void terminal_putchar(char c) {
+    // Calculate the offset into video memory
+    int offset = (terminal.active_pane->buffer->cursor_y * 80 + terminal.active_pane->buffer->cursor_x) * 2;
+    char* video_memory = (char*)0xB8000;
+    uint8_t attribute = (terminal.theme.background << 4) | (terminal.theme.foreground & 0x0F);
+
     if (c == '\n') {
         terminal.active_pane->buffer->cursor_y++;
         terminal.active_pane->buffer->cursor_x = 0;
@@ -156,15 +169,38 @@ void terminal_putchar(char c) {
     } else if (c == '\b') {
         if (terminal.active_pane->buffer->cursor_x > 0) {
             terminal.active_pane->buffer->cursor_x--;
-            // Handle backspace character
-            printf("\b \b"); // Move cursor back, print space, move back again
+            // Handle backspace character by writing a space
+            video_memory[offset - 2] = ' ';
+            video_memory[offset - 1] = attribute;
         }
     } else {
         // Print the character at the current cursor position
-        putchar(c);
+        video_memory[offset] = c;
+        video_memory[offset + 1] = attribute;  // Fix: write attribute to the next byte
         terminal.active_pane->buffer->cursor_x++;
     }
 
+    // Handle scrolling
+    if (terminal.active_pane->buffer->cursor_x >= 80) {
+        terminal.active_pane->buffer->cursor_x = 0;
+        terminal.active_pane->buffer->cursor_y++;
+    }
+
+    if (terminal.active_pane->buffer->cursor_y >= 25) {
+        // Scroll the screen up by one line
+        for (int i = 0; i < 24 * 80 * 2; i++) {
+            video_memory[i] = video_memory[i + 80 * 2];
+        }
+
+        // Clear the last line
+        for (int i = 24 * 80 * 2; i < 25 * 80 * 2; i += 2) {  // Fix: correct loop bounds
+            video_memory[i] = ' ';
+            video_memory[i + 1] = attribute;  // Fix: set attribute byte
+        }
+        terminal.active_pane->buffer->cursor_y = 24;
+    }
+
+    // Update the hardware cursor with current position
     update_cursor(terminal.active_pane->buffer->cursor_x, terminal.active_pane->buffer->cursor_y);
 }
 
@@ -183,9 +219,8 @@ void terminal_printf(const char* format, ...) {
 
 // Print the command prompt
 void terminal_print_prompt(void) {
-    printf("\033[38;5;%dm", terminal.theme.prompt_fg); // Set prompt color
-    printf("user@myos:/$ "); // Example prompt
-    printf("\033[0m"); // Reset colors
+    printf("user@Konstruct:/$ "); // Example prompt
+
 }
 
 // Set the terminal theme
@@ -258,3 +293,4 @@ void terminal_readline(char* buffer, size_t size) {
 int vprintf(const char* format, va_list args) {
     return vsnprintf(NULL, 0, format, args); // Use vsnprintf as a fallback
 }
+

@@ -11,16 +11,24 @@ typedef struct {
 } Font;
 
 // Include our libc
-#include "libc/libc.h"
+#include <libc.h>
 
 // Include VGA driver
-#include "drivers/vga.h"
+#include <drivers/vga.h>
 
 // Include filesystem
-#include "fs/fs.h"
+#include <fs/fs.h>
 
 // Include enhanced terminal
-#include "drivers/terminal.h"
+#include <drivers/terminal.h>
+
+// Include boot device handler
+#include <fs/bootdev.h>
+
+// Multiboot information (used by bootdev.c)
+uint32_t mboot_drive_number = 0x80;  // Default to first hard disk
+uint32_t mboot_drive_part_start = 0;
+uint32_t mboot_drive_part_length = 0;
 
 // Multiboot header
 __attribute__((section(".multiboot")))
@@ -29,31 +37,6 @@ const unsigned int multiboot_header[] = {
     0x0,        // Flags (no video mode, no additional info)
     -(0x1BADB002 + 0x0) // Checksum (magic + flags + checksum = 0)
 };
-
-// Define constants for video memory and colors
-#define VIDEO_MEMORY 0xb8000
-#define WHITE_ON_BLACK 0x0f
-
-// Default screen dimensions (80x25 text mode)
-#define DEFAULT_WIDTH 80
-#define DEFAULT_HEIGHT 25
-
-// VBE mode constants
-#define VBE_CONTROLLER_INFO 0x4F00
-#define VBE_MODE_INFO 0x4F01
-#define VBE_SET_MODE 0x4F02
-
-// Shell buffer size
-#define CMD_BUFFER_SIZE 256
-
-// Keyboard port definitions
-#define KEYBOARD_DATA_PORT 0x60
-#define KEYBOARD_STATUS_PORT 0x64
-
-// Global screen dimensions (can be changed)
-int screen_width = DEFAULT_WIDTH;
-int screen_height = DEFAULT_HEIGHT;
-int is_graphics_mode = 0;  // 0 for text mode, 1 for graphics mode
 
 // External declarations for font-related functions
 extern const Font* font_get_default(void);
@@ -82,6 +65,10 @@ void update_cursor(int x, int y);
 int set_vbe_mode(int width, int height, int bpp);
 void reboot(void);
 void soft_reboot(void);
+void handle_run_command(const char* cmd);
+
+// Ensure this function is properly declared for external linking
+char scancode_to_ascii(unsigned char scancode);
 
 // Kernel main function
 void kernel_main(void) {
@@ -119,14 +106,25 @@ void kernel_main(void) {
 void clear_screen(void) {
     char* video_memory = (char*)VIDEO_MEMORY;
 
-    // Clear the entire screen based on current dimensions
-    for (int i = 0; i < screen_width * screen_height * 2; i += 2) {
+    // Clear the entire screen based on default dimensions (80x25)
+    for (int i = 0; i < DEFAULT_WIDTH * DEFAULT_HEIGHT * 2; i += 2) {
         video_memory[i] = ' ';
         video_memory[i + 1] = WHITE_ON_BLACK;
     }
 
     // Reset cursor position and update hardware cursor
+    screen_width = DEFAULT_WIDTH;
+    screen_height = DEFAULT_HEIGHT;
     update_cursor(0, 0);
+        // Tell the VGA controller we are setting the cursor
+        outb(0x3D4, 14);  // High byte
+        outb(0x3D5, 0 >> 8);
+        outb(0x3D4, 15);  // Low byte
+        outb(0x3D5, 0 & 0xFF);
+        outb(0x3D4, 14);  // High byte
+        outb(0x3D5, 0 >> 8);
+        outb(0x3D4, 15);  // Low byte
+        outb(0x3D5, 0 & 0xFF);
 }
 
 // Update the hardware cursor position
@@ -138,53 +136,6 @@ void update_cursor(int x, int y) {
     outb(0x3D5, position >> 8);
     outb(0x3D4, 15);  // Low byte
     outb(0x3D5, position & 0xFF);
-}
-
-// Function to print a single character
-void print_char(char c) {
-    static int cursor_x = 0, cursor_y = 0;
-    char* video_memory = (char*)VIDEO_MEMORY;
-
-    if (c == '\n') {
-        cursor_x = 0;
-        cursor_y++;
-    } else if (c == '\b') {
-        if (cursor_x > 0) {
-            cursor_x--;
-            int offset = (cursor_y * screen_width + cursor_x) * 2;
-            video_memory[offset] = ' ';
-            video_memory[offset + 1] = WHITE_ON_BLACK;
-        }
-    } else {
-        int offset = (cursor_y * screen_width + cursor_x) * 2;
-        video_memory[offset] = c;
-        video_memory[offset + 1] = WHITE_ON_BLACK;
-        cursor_x++;
-        if (cursor_x >= screen_width) {
-            cursor_x = 0;
-            cursor_y++;
-        }
-    }
-
-    if (cursor_y >= screen_height) {
-        // Scroll the screen up by one line
-        for (int i = 0; i < (screen_height - 1) * screen_width * 2; i++) {
-            video_memory[i] = video_memory[i + screen_width * 2];
-        }
-
-        // Clear the last line
-        for (int i = (screen_height - 1) * screen_width * 2; 
-             i < screen_height * screen_width * 2; i += 2) {
-            video_memory[i] = ' ';
-            video_memory[i + 1] = WHITE_ON_BLACK;
-        }
-
-        // Move cursor up one row
-        cursor_y = screen_height - 1;
-    }
-
-    // Update the hardware cursor
-    update_cursor(cursor_x, cursor_y);
 }
 
 // Kernel-level putchar implementation
@@ -204,31 +155,6 @@ unsigned char read_scan_code(void) {
     // Wait for a key to be pressed
     while (!(inb(KEYBOARD_STATUS_PORT) & 1));
     return inb(KEYBOARD_DATA_PORT);
-}
-
-// Function to convert a scan code to ASCII
-char scancode_to_ascii(unsigned char scancode) {
-    const char scancode_to_ascii_map[] = {
-        0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0, 0,
-        'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0, 0,
-        'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0, '\\',
-        'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, '*', 0, ' '
-    };
-
-    // Special keys - handle Enter key explicitly
-    if (scancode == 0x1C) { // Enter key scancode
-        return '\n';
-    }
-    
-    // Handle backspace
-    if (scancode == 0x0E) { // Backspace key scancode
-        return '\b';
-    }
-
-    if (scancode < sizeof(scancode_to_ascii_map)) {
-        return scancode_to_ascii_map[scancode];
-    }
-    return 0; // Not a printable character
 }
 
 // Low-level port I/O functions
@@ -387,6 +313,35 @@ void reboot(void) {
 void soft_reboot(void) {
     // Trigger the bootstrap interrupt
     __asm__ __volatile__("int $0x19");
+}
+
+// Add new function to handle the 'run' command
+void handle_run_command(const char* cmd) {
+    // Extract the filename part
+    const char* filename = cmd + 4; // Skip "run "
+    
+    // Skip any leading spaces
+    while (*filename == ' ') filename++;
+    
+    // Check if filename is empty
+    if (*filename == '\0') {
+        console_write("Error: No filename specified\n");
+        console_write("Usage: run <filename>\n");
+        return;
+    }
+    
+    // Execute the binary
+    console_write("Executing program: ");
+    console_write(filename);
+    console_write("\n");
+    
+    int result = elf_execute(filename, 0, NULL);
+    
+    char result_str[16];
+    itoa(result, result_str, 10);
+    console_write("Program exited with code: ");
+    console_write(result_str);
+    console_write("\n");
 }
 
 // Handle shell commands
@@ -650,6 +605,42 @@ void handle_command(const char* cmd) {
         set_vbe_mode(1024, 768, 8);
         return;
     }
+    else if (strncmp(cmd, "run", 3) == 0 && cmd[3] == ' ') {
+        handle_run_command(cmd);
+    }
+    else if (strcmp(cmd, "mount") == 0) {
+        // Display currently mounted filesystems
+        console_write("Mounted filesystems:\n");
+        
+        // This would show information about mounted filesystems
+        // For now, let's check if we have a boot device mounted
+        if (bootdev_get_type() != BOOT_DEV_UNKNOWN) {
+            char mount_info[100];
+            sprintf(mount_info, "  %s on %s (%s)\n", 
+                    bootdev_get_type() == BOOT_DEV_CDROM ? "/cdrom" : "/media",
+                    bootdev_get_type_name(),
+                    bootdev_get_type() == BOOT_DEV_CDROM ? "read-only" : "read-write");
+            console_write(mount_info);
+        } else {
+            console_write("  No filesystems mounted\n");
+        }
+    }
+    else if (strncmp(cmd, "mount ", 6) == 0) {
+        // Mount a specific device (future expansion)
+        console_write("Manual mounting not yet supported\n");
+    }
+    else if (strncmp(cmd, "remount ", 8) == 0) {
+        // Remount the boot device to a different path
+        const char* path = cmd + 8;
+        int result = fs_remount(path);
+        if (result == 0) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "Remounted boot device to %s\n", path);
+            console_write(buf);
+        } else {
+            console_write("Failed to remount device\n");
+        }
+    }
     else if (strcmp(cmd, "help") == 0) {
         console_write("Available commands:\n");
         console_write("  help       - Show this help message\n");
@@ -666,6 +657,8 @@ void handle_command(const char* cmd) {
         console_write("  theme      - Change terminal theme\n");
         console_write("  reboot     - Reboot the system\n");
         console_write("  softreboot - Perform a soft reboot\n");
+        console_write("  run file    - Execute a binary executable\n");
+        console_write("  remount <path> - Remount boot device to a new path\n");
         console_write("\nFilesystem commands:\n");
         console_write("  ls [path]  - List directory contents\n");
         console_write("  cd [path]  - Change current directory\n");
@@ -675,6 +668,9 @@ void handle_command(const char* cmd) {
         console_write("  rm path    - Delete a file\n");
         console_write("  cat path   - Display file contents\n");
         console_write("  echo text > file - Write text to file\n");
+        console_write("\nMount commands:\n");
+        console_write("  mount      - Show mounted filesystems\n");
+        console_write("  mount dev  - Mount a specific device (not yet implemented)\n");
     } 
     else if (strcmp(cmd, "version") == 0) {
         console_write("MyOS version 0.1 with integrated shell\n");
@@ -713,7 +709,14 @@ void shell_main(void) {
             terminal_println("Performing soft reboot...");
             soft_reboot();
         }
-        
+        else if (strcmp(cmd_buffer, "exit") == 0) {
+            terminal_println("Exiting shell...");
+            break; // Exit the shell loop
+        } else if (strcmp(cmd_buffer, "help") == 0) {
+    
+        } else {
+ 
+        }
         handle_command(cmd_buffer);
     }
 }

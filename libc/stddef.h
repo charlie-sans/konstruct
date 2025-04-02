@@ -20,7 +20,7 @@ typedef unsigned long time_t;
 /* Boolean defines */
 #define true 1
 #define false 0
-typedef unsigned char bool;
+// typedef unsigned char bool;
 
 /* offsetof - Calculates the offset of a struct member */
 #define offsetof(type, member) __builtin_offsetof(type, member)

@@ -32,9 +32,7 @@ typedef struct {
 // Simplified BIOS interrupt function
 // In a real implementation, this would need to be implemented in assembly
 static int bios_interrupt(int interrupt, registers_t* regs) {
-    // This is a placeholder. In a real OS, you'd need to save the CPU state,
-    // switch to real mode, call the BIOS interrupt, switch back to protected mode,
-    // and restore the CPU state.
+
     printf("BIOS interrupt %x with AX=%x BX=%x CX=%x DX=%x\n", 
            interrupt, regs->eax, regs->ebx, regs->ecx, regs->edx);
     
@@ -158,9 +156,7 @@ int vga_get_vbe_modes(uint16_t* modes, int max_modes) {
         return 0;
     }
     
-    // In a real implementation, you would need to access the video_modes_ptr
-    // which might require real-mode segment:offset calculations and memory access
-    
+
     // For testing, return some common VBE modes
     if (max_modes >= 4) {
         modes[0] = VGA_MODE_640x480;

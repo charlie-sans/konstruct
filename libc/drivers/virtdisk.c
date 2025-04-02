@@ -60,9 +60,7 @@ int fs_mount_disk(const char* diskpath) {
     
     printf("Mounted disk: %s\n", diskpath);
     
-    // You would now initialize the ramdisk from the virtual disk data
-    // This implementation is left as an exercise
-    
+
     return 0;
 }
 
@@ -155,16 +153,14 @@ static int vdisk_load(const char* path) {
 
 // Helper function to save disk data back to the disk image file
 static int vdisk_save(void) {
-    // In a real OS, this would use file I/O to save the disk image
-    // For now, we'll simulate it with a stub
-    
+
     if (!vdisk.mounted || !vdisk.disk_data || !vdisk.disk_path) {
         return -1;
     }
     
     printf("Saving disk image: %s\n", vdisk.disk_path);
     
-    // In a real implementation, you would write vdisk.disk_data to a file
+
     
     return 0;
 }
@@ -175,8 +171,6 @@ static int vdisk_create(const char* path, uint32_t size) {
     // For now, we'll simulate it with a stub
     
     printf("Creating new disk image: %s (%d bytes)\n", path, size);
-    
-    // In a real implementation, you would create a new file of the given size
-    
+
     return 0;
 }

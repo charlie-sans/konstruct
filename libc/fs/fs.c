@@ -1,7 +1,22 @@
 #include "fs.h"
+#include "bootdev.h"
+#include "iso9660.h"
 
 // Global filesystem instance
 filesystem_t* fs = NULL;
+
+// Add mount point tracking
+#define MAX_MOUNT_POINTS 10
+
+typedef struct {
+    char path[FS_MAX_PATH_LENGTH];
+    boot_device_type_t type;
+    int (*read_file)(const char* path, void* buffer, size_t size);
+    int (*list_directory)(const char* path, char* buffer, size_t size);
+} mount_point_t;
+
+static mount_point_t mount_points[MAX_MOUNT_POINTS];
+static int num_mount_points = 0;
 
 // Helper function to get current time
 static time_t get_time(void) {
@@ -9,6 +24,77 @@ static time_t get_time(void) {
     // For now, just return a counter that increments each time
     static time_t time_counter = 0;
     return ++time_counter;
+}
+
+// Initialize mounting system
+static void fs_mount_init(void) {
+    // Clear mount points
+    memset(mount_points, 0, sizeof(mount_points));
+    num_mount_points = 0;
+    
+    // Auto-mount the boot device if possible
+    if (bootdev_init() == BOOTDEV_SUCCESS) {
+        // Mount at /cdrom for CDROM, /media for others
+        const char* mount_path = (bootdev_get_type() == BOOT_DEV_CDROM) ? "/cdrom" : "/media";
+        
+        // Create mount point if it doesn't exist
+        if (!fs_exists(mount_path)) {
+            fs_mkdir(mount_path);
+        }
+        
+        // Mount the boot device
+        bootdev_mount(mount_path);
+        
+        // Register the mount point
+        strcpy(mount_points[num_mount_points].path, mount_path);
+        mount_points[num_mount_points].type = bootdev_get_type();
+        
+        // Set appropriate filesystem driver functions
+        if (bootdev_get_type() == BOOT_DEV_CDROM) {
+            mount_points[num_mount_points].read_file = iso9660_read_file;
+            mount_points[num_mount_points].list_directory = iso9660_list_directory;
+        } else {
+            // For FAT or other filesystems, add appropriate drivers
+            // For now, we'll just use NULL placeholders
+            mount_points[num_mount_points].read_file = NULL;
+            mount_points[num_mount_points].list_directory = NULL;
+        }
+        
+        num_mount_points++;
+        
+        printf("Mounted boot device at %s\n", mount_path);
+    }
+}
+
+// Remount the boot device to a different path
+int fs_remount(const char* new_mount_path) {
+    if (!fs || !new_mount_path) return FS_ERR_INVALID;
+    
+    // Check if we have any mount points
+    if (num_mount_points == 0) {
+        return FS_ERR_NOT_FOUND;
+    }
+    
+    // Normalize the path
+    char normalized_path[FS_MAX_PATH_LENGTH];
+    fs_normalize_path(new_mount_path, normalized_path, sizeof(normalized_path));
+    
+    // If mounting to root, special case
+    if (strcmp(normalized_path, "/") == 0) {
+        // No need to create a mount point for root
+    } else {
+        // Create mount point if it doesn't exist
+        if (!fs_exists(normalized_path)) {
+            int result = fs_mkdir(normalized_path);
+            if (result < 0) return result;
+        }
+    }
+    
+    // Update the mount point path
+    strcpy(mount_points[0].path, normalized_path);
+    
+    printf("Remounted boot device to %s\n", normalized_path);
+    return 0;
 }
 
 // Initialize the filesystem
@@ -43,6 +129,9 @@ void fs_init(void) {
     
     // Create some example files and directories
     fs_create_example_files();
+    
+    // Initialize mount points
+    fs_mount_init();
 }
 
 // Clean up the filesystem
@@ -380,6 +469,19 @@ char* fs_getcwd(char* buf, size_t size) {
 int fs_listdir(const char* path, char* buffer, size_t bufsize) {
     if (!fs || !buffer || bufsize == 0) return FS_ERR_INVALID;
     
+    const char* rel_path;
+    mount_point_t* mount;
+    
+    // Check if this path is under a mount point
+    if (fs_check_mount_point(path, &rel_path, &mount)) {
+        // Use the mount point's list_directory function
+        if (mount->list_directory) {
+            return mount->list_directory(rel_path, buffer, bufsize);
+        } else {
+            return -1; // Unsupported operation
+        }
+    }
+    
     // Find the directory
     fs_dir_t* dir = path ? fs_find_dir(path) : fs->current_dir;
     if (!dir) return FS_ERR_NOT_FOUND;
@@ -525,6 +627,19 @@ int fs_delete(const char* path) {
 int fs_read(const char* path, void* buffer, size_t size, size_t offset) {
     if (!fs || !path || !buffer) return FS_ERR_INVALID;
     
+    const char* rel_path;
+    mount_point_t* mount;
+    
+    // Check if this path is under a mount point
+    if (fs_check_mount_point(path, &rel_path, &mount)) {
+        // Use the mount point's read function
+        if (mount->read_file) {
+            return mount->read_file(rel_path, buffer, size);
+        } else {
+            return -1; // Unsupported operation
+        }
+    }
+    
     // Find the file
     fs_file_t* file = fs_find_file(path);
     if (!file) return FS_ERR_NOT_FOUND;
@@ -613,14 +728,43 @@ int fs_getsize(const char* path) {
 int fs_exists(const char* path) {
     if (!fs || !path) return 0;
     
-    // Try to find as directory first
     fs_dir_t* dir = fs_find_dir(path);
     if (dir) return 1;
     
-    // Then try to find as file
     fs_file_t* file = fs_find_file(path);
     if (file) return 1;
     
+    return 0;
+}
+
+// Check if a path is under a mount point
+int fs_check_mount_point(const char* path, const char** rel_path, mount_point_t** mount) {
+    for (int i = 0; i < num_mount_points; i++) {
+        // Special case for root mount
+        if (strcmp(mount_points[i].path, "/") == 0) {
+            *rel_path = path;
+            *mount = &mount_points[i];
+            return 1;
+        }
+        
+        int mount_len = strlen(mount_points[i].path);
+        
+        // Check if path starts with mount point path
+        if (strncmp(path, mount_points[i].path, mount_len) == 0) {
+            // Path is under this mount point
+            if (path[mount_len] == '/' || path[mount_len] == '\0') {
+                *rel_path = path + mount_len;
+                // If rel_path is empty or just "/", make it "/"
+                if (**rel_path == '\0') {
+                    *rel_path = "/";
+                }
+                *mount = &mount_points[i];
+                return 1;
+            }
+        }
+    }
+    
+    // Not under a mount point
     return 0;
 }
 

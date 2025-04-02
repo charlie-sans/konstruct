@@ -166,6 +166,20 @@ void* memset(void* s, int c, size_t n) {
     return s;
 }
 
+// Compare memory
+int memcmp(const void* s1, const void* s2, size_t n) {
+    const unsigned char* p1 = s1;
+    const unsigned char* p2 = s2;
+    
+    for (size_t i = 0; i < n; i++) {
+        if (p1[i] != p2[i]) {
+            return p1[i] < p2[i] ? -1 : 1;
+        }
+    }
+    
+    return 0;  // Memory regions are identical
+}
+
 // String duplication
 char* strdup(const char* str) {
     size_t len = strlen(str) + 1;  // Include null terminator

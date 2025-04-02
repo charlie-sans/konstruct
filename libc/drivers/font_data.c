@@ -1,5 +1,6 @@
 #include "../libc/stdfont.h"
-
+#include "vga.h"
+#include "../libc/libc.h"
 // Simple 8x8 monospace bitmap font data for ASCII characters (32 to 126)
 const uint8_t default_font_data[] = {
     // Space (32)
@@ -223,20 +224,23 @@ int font_get_pixel(const Font* font, char c, int x, int y) {
     return (font->data[char_offset + y] & (1 << (7 - x))) != 0;
 }
 
+
 // Initialize the font system
 void font_init(void) {
-    // In the future, we could load BMP fonts here
-    // Example usage:
-    /*
-    const uint8_t* bmp_data = embedded_font_bmp;
-    size_t bmp_size = sizeof(embedded_font_bmp);
+
+    const char embeded_font_bmp[] = {
+      //  #embed "font.bmp"
+    };
+    const uint8_t* bmp_data = embeded_font_bmp;
+    size_t bmp_size = sizeof(embeded_font_bmp);
     
     Font* loaded_font = load_font_from_bmp(bmp_data, bmp_size, 8, 8, 32);
     if (loaded_font) {
-        // Use the loaded font
-        custom_font = loaded_font;
+printf("Font loaded successfully.\n");
+    } else {
+        printf("Failed to load font.\n");
     }
-    */
+
 }
 
 // Draw a character using a font

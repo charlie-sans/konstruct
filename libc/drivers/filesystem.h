@@ -87,4 +87,7 @@ int fs_unmount_disk(void);
 // Sync in-memory filesystem to disk
 int fs_sync(void);
 
+// Remount the boot device to a different path
+int fs_remount(const char* new_mount_path);
+
 #endif // FILESYSTEM_H

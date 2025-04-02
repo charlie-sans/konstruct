@@ -56,5 +56,5 @@ typedef unsigned long long int uintmax_t;
 #define UINT16_MAX 65535
 #define UINT32_MAX 4294967295U
 #define UINT64_MAX 18446744073709551615ULL
-
+#define NULL ((void *)0)
 #endif /* _STDINT_H */

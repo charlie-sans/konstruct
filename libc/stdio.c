@@ -1,10 +1,55 @@
-#include "libc.h"
+#include <libc.h>
+#include <stddef.h>
 
-// External functions from kernel.c
-extern void print_char(char c);
 extern char scancode_to_ascii(unsigned char scancode);
 extern unsigned char read_scan_code(void);
 
+// Function to print a single character
+void print_char(char c) {
+    static int cursor_x = 0, cursor_y = 0;
+    char* video_memory = (char*)VIDEO_MEMORY;
+
+    if (c == '\n') {
+        cursor_x = 0;
+        cursor_y++;
+    } else if (c == '\b') {
+        if (cursor_x > 0) {
+            cursor_x--;
+            int offset = (cursor_y * screen_width + cursor_x) * 2;
+            video_memory[offset] = ' ';
+            video_memory[offset + 1] = WHITE_ON_BLACK;
+        }
+    } else {
+        int offset = (cursor_y * screen_width + cursor_x) * 2;
+        video_memory[offset] = c;
+        video_memory[offset + 1] = WHITE_ON_BLACK;
+        cursor_x++;
+        if (cursor_x >= screen_width) {
+            cursor_x = 0;
+            cursor_y++;
+        }
+    }
+
+    if (cursor_y >= screen_height) {
+        // Scroll the screen up by one line
+        for (int i = 0; i < (screen_height - 1) * screen_width * 2; i++) {
+            video_memory[i] = video_memory[i + screen_width * 2];
+        }
+
+        // Clear the last line
+        for (int i = (screen_height - 1) * screen_width * 2; 
+             i < screen_height * screen_width * 2; i += 2) {
+            video_memory[i] = ' ';
+            video_memory[i + 1] = WHITE_ON_BLACK;
+        }
+
+        // Move cursor up one row
+        cursor_y = screen_height - 1;
+    }
+
+    // Update the hardware cursor
+    update_cursor(cursor_x, cursor_y);
+}
 // Function to apply ANSI effects programmatically
 static void apply_ansi_effect(char cmd, int* params, int param_count) {
     switch (cmd) {
@@ -98,6 +143,7 @@ int putchar(int c) {
     print_char((char)c); // Use the existing low-level function
     return c;
 }
+
 
 int puts(const char* s) {
     while (*s) {

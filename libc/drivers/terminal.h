@@ -59,7 +59,7 @@ void terminal_cleanup(void);
 void terminal_draw_pane(terminal_pane_t* pane);
 void terminal_scroll_pane(terminal_pane_t* pane, int lines);
 void terminal_set_active_pane(terminal_pane_t* pane);
-
+void terminal_clear_content(void);
 // Terminal output functions
 void terminal_putchar(char c);
 
