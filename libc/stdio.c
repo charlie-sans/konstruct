@@ -1,30 +1,105 @@
 #include <libc.h>
 #include <stddef.h>
 
-extern char scancode_to_ascii(unsigned char scancode);
+#include <globals.h>
+#define screen_width 80
+#define screen_height 25
+
+char scancode_to_ascii(unsigned char scancode) {
+    static int shift_pressed = 0;
+    static int caps_lock_enabled = 0;
+
+    // Handle shift key press and release
+    if (scancode == 0x2A || scancode == 0x36) { // Shift key press
+        shift_pressed = 1;
+        return 0;
+    } else if (scancode == 0xAA || scancode == 0xB6) { // Shift key release
+        shift_pressed = 0;
+        return 0;
+    }
+
+    // Handle Caps Lock
+    if (scancode == 0x3A) { // Caps Lock press
+        caps_lock_enabled = !caps_lock_enabled;
+       
+    }
+
+    const char scancode_to_ascii_map_lower[] = {
+        0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0, 0,
+        'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0, 0,
+        'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0, '\\',
+        'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, '*', 0, ' '
+    };
+
+    const char scancode_to_ascii_map_upper[] = {
+        0, 0, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0, 0,
+        'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0, 0,
+        'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0, '|',
+        'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, '*', 0, ' '
+    };
+    
+    if (scancode == 0x1C) { // Enter key
+        return '\n';
+    } else if (scancode == 0x0E) { // Backspace key
+        return '\b';
+    } else if (scancode == 0x39) { // Space key
+        return ' ';
+    } else if (scancode == 0x3A) { // Caps Lock key
+        return 0; // No character output for Caps Lock
+    }
+    else if (scancode == 0xE0) { // Extended key prefix
+        return 0; // No character output for extended keys
+    } else if (scancode == 0xE1) { // Pause/Break key
+        return 0; // No character output for Pause/Break
+    } else if (scancode == 0xE2) { // Print Screen key
+        return 0; // No character output for Print Screen
+    } else if (scancode == 0xE3) { // Insert key
+        return 0; // No character output for Insert
+    } else if (scancode == 0xE4) { // Home key
+        return 0; // No character output for Home
+    } else if (scancode == 0xE5) { // Page Up key
+        return 0; // No character output for Page Up
+    } else if (scancode == 0xE6) { // Delete key
+        return 0; // No character output for Delete
+    } else if (scancode == 0xE7) { // End key
+        return 0; // No character output for End
+    } else if (scancode == 0xE8) { // Page Down key
+        return 0; // No character output for Page Down
+    } else if (scancode == 0xE9) { // Arrow keys and other special keys can be handled here as needed.
+        return 0; // Not a printable character
+    }
+    if (scancode < sizeof(scancode_to_ascii_map_lower)) {
+        if ((shift_pressed && !caps_lock_enabled) || (!shift_pressed && caps_lock_enabled)) {
+            return scancode_to_ascii_map_upper[scancode];
+        } else {
+            return scancode_to_ascii_map_lower[scancode];
+        }
+    }
+    return 0;  // Not a printable character
+}
 extern unsigned char read_scan_code(void);
 
 // Function to print a single character
 void print_char(char c) {
     static int cursor_x = 0, cursor_y = 0;
     char* video_memory = (char*)VIDEO_MEMORY;
-
+    
     if (c == '\n') {
         cursor_x = 0;
         cursor_y++;
     } else if (c == '\b') {
         if (cursor_x > 0) {
             cursor_x--;
-            int offset = (cursor_y * screen_width + cursor_x) * 2;
+            int offset = (cursor_y * 80 + cursor_x) * 2;
             video_memory[offset] = ' ';
             video_memory[offset + 1] = WHITE_ON_BLACK;
         }
     } else {
-        int offset = (cursor_y * screen_width + cursor_x) * 2;
+        int offset = (cursor_y * 80 + cursor_x) * 2;
         video_memory[offset] = c;
         video_memory[offset + 1] = WHITE_ON_BLACK;
         cursor_x++;
-        if (cursor_x >= screen_width) {
+        if (cursor_x >= 80) {
             cursor_x = 0;
             cursor_y++;
         }
@@ -32,13 +107,13 @@ void print_char(char c) {
 
     if (cursor_y >= screen_height) {
         // Scroll the screen up by one line
-        for (int i = 0; i < (screen_height - 1) * screen_width * 2; i++) {
-            video_memory[i] = video_memory[i + screen_width * 2];
+        for (int i = 0; i < (screen_height - 1) * 80 * 2; i++) {
+            video_memory[i] = video_memory[i + 80  * 2];
         }
 
         // Clear the last line
-        for (int i = (screen_height - 1) * screen_width * 2; 
-             i < screen_height * screen_width * 2; i += 2) {
+        for (int i = (screen_height - 1) * 80 * 2; 
+             i < screen_height * 80 * 2; i += 2) {
             video_memory[i] = ' ';
             video_memory[i + 1] = WHITE_ON_BLACK;
         }

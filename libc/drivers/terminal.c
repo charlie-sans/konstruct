@@ -3,7 +3,16 @@
 #include <fs/fs.h>
 
 // External functions from kernel.c
-extern void update_cursor(int x, int y);
+// Update the hardware cursor position
+void update_cursor(int cursor_x, int cursor_y) {
+    unsigned short position = cursor_y * 80 + cursor_x;
+    
+    // Tell the VGA controller we are setting the cursor
+    outb(0x3D4, 14);  // High byte
+    outb(0x3D5, position >> 8);
+    outb(0x3D4, 15);  // Low byte
+    outb(0x3D5, position & 0xFF);
+}
 
 // Global terminal instance
 terminal_t terminal;

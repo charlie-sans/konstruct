@@ -2,6 +2,7 @@
 #include "fs.h"
 #include "../libc/libc.h"
 #include "../drivers/vga.h"
+#include <kernel.h>
 
 // Global boot device information
 static boot_device_t boot_device = {
@@ -12,10 +13,11 @@ static boot_device_t boot_device = {
     .driver_data = NULL
 };
 
-// Boot multiboot information (from multiboot header)
-extern uint32_t mboot_drive_number;
-extern uint32_t mboot_drive_part_start;
-extern uint32_t mboot_drive_part_length;
+// Multiboot information (used by bootdev.c)
+uint32_t mboot_drive_number = 0x80;  // Default to first hard disk
+uint32_t mboot_drive_part_start = 0;
+uint32_t mboot_drive_part_length = 0;
+
 
 // Create a Disk Address Packet (DAP)
 typedef struct {

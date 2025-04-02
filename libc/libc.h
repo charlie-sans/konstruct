@@ -4,6 +4,9 @@
 /* Include our custom implementations of standard headers */
 #include <stddef.h>
 #include <stdint.h>
+// Default screen dimensions (80x25 text mode)
+#define DEFAULT_WIDTH 80
+#define DEFAULT_HEIGHT 25
 
 /* For variadic functions */
 typedef __builtin_va_list va_list;
@@ -14,9 +17,10 @@ typedef __builtin_va_list va_list;
 #define VIDEO_MEMORY 0xb8000
 #define WHITE_ON_BLACK 0x0f
 
-// Default screen dimensions (80x25 text mode)
-#define DEFAULT_WIDTH 80
-#define DEFAULT_HEIGHT 25
+#define BLACK_ON_WHITE 0xf0
+// pid_t
+typedef int pid_t;
+#define SIGINT 2
 
 // VBE mode constants
 #define VBE_CONTROLLER_INFO 0x4F00
@@ -30,11 +34,10 @@ typedef __builtin_va_list va_list;
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 
-// Global screen dimensions (can be changed)
-// Changed from definitions to declarations with extern
-extern int screen_width;
-extern int screen_height;
-extern int is_graphics_mode;  // 0 for text mode, 1 for graphics mode
+
+
+
+
 
 // Memory functions
 void* memcpy(void* dest, const void* src, size_t n);

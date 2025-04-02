@@ -10,7 +10,7 @@ extern void kernel_putchar(char c);
 extern char read_scan_code(void);
 extern char scancode_to_ascii(unsigned char scancode);
 
-// Heap boundaries (adjust as needed for your environment)
+// Heap boundaries
 static char* heap_end = 0;
 extern char _end; // Defined in your linker script
 #define HEAP_START ((char*)&_end)

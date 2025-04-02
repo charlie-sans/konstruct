@@ -1,109 +1,108 @@
-# Makefile for building the Konsole kernel with Newlib support
-# though newlib doesnt even exist in this version of the kernel, it is still included for future use if anyting needs it 
+# Makefile for Konsole kernel with libc support
+
 # Compiler settings
 CC = gcc
 AS = nasm
 LD = ld
 
-# Detect macOS and set cross-compiler flags if needed
+# Cross-compiler detection for macOS (commented out for now)
 UNAME_S := $(shell uname -s)
-# ifeq ($(UNAME_S),Darwin)
-#     # On macOS, we need to use a cross-compiler for i386
-#     CC = i386-elf-gcc
-#     LD = i386-elf-ld
-#     # If homebrew cross-compiler is not installed, show helpful message
-#     ifeq ($(shell which $(CC)),)
-#         $(warning "i386-elf-gcc not found. Please install using:")
-#         $(warning "brew tap nativeos/i386-elf-toolchain")
-#         $(warning "brew install i386-elf-binutils i386-elf-gcc")
-#     endif
-# endif
+# macOS cross-compiler setup would go here if needed
 
-# Flags for kernel build
-CFLAGS =  -m32 -ffreestanding -fno-pie -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs  -I. -g
-CFLAGS += -I. -Id:\tempsting\newlib\include -Ilibc/
-ASFLAGS = -f elf32
-LDFLAGS = -m elf_i386 -Tlinker.ld
-
-# Add Newlib source directories
-NEWLIB_SRC = d:\tempsting\newlib
-CFLAGS += -I$(NEWLIB_SRC)\include
-
-# Add Newlib source files
-NEWLIB_OBJS = \
-    $(NEWLIB_SRC)\stdio\*.c \
-    $(NEWLIB_SRC)\string\*.c \
-    $(NEWLIB_SRC)\stdlib\*.c
-
-# Ensure syscalls/sys directory exists
-$(shell mkdir -p syscalls/sys)
-
-# Define object directory
-OBJ_DIR = obj
-
-# Source files - updated to include terminal, elf, and syscalls
-C_SRC = $(wildcard kernel.c libc/*.c drivers/*.c fs/*.c elf/*.c syscalls/*.c syscalls/sys/*.c)
-ASM_SRC = # No boot.asm needed anymore
-
-# Object files with obj directory prefix
-C_OBJ = $(patsubst %.c, $(OBJ_DIR)/%.o, $(C_SRC))
-ASM_OBJ = $(patsubst %.asm, $(OBJ_DIR)/%.o, $(ASM_SRC))
-
-# Link Newlib objects
-OBJS += $(NEWLIB_OBJS)
-
-# Output files
-KERNEL_ELF = kernel.elf
-ISO_IMAGE = myos.iso
+# Directories
+SRC_DIR = .
+LIBC_DIR = libc
+DRIVERS_DIR = drivers
+FS_DIR = fs
+ELF_DIR = elf
+SYSCALLS_DIR = syscalls
+BUILD_DIR = build
+ISO_DIR = iso_root
 
 # GRUB files
 GRUB_DIR = grub
 GRUB_CFG = $(GRUB_DIR)/grub.cfg
 GRUB_THEME_DIR = $(GRUB_DIR)/Particle
 
+# Output files
+KERNEL_ELF = kernel.elf
+ISO_IMAGE = myos.iso
+
+# Compiler and linker flags
+CFLAGS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc \
+         -fno-builtin -fno-stack-protector -nostartfiles \
+         -nodefaultlibs -g
+CFLAGS += -I$(SRC_DIR) -I$(LIBC_DIR)
+ASFLAGS = -f elf32
+LDFLAGS = -m elf_i386 -Tlinker.ld
+
+# Library
+LIBC_LIB = $(LIBC_DIR)/libc.a
+
+# Source files
+C_SRC = $(wildcard $(SRC_DIR)/kernel.c) \
+        $(wildcard $(DRIVERS_DIR)/*.c) \
+        $(wildcard $(FS_DIR)/*.c) \
+        $(wildcard $(ELF_DIR)/*.c) \
+        $(wildcard $(SYSCALLS_DIR)/*.c) \
+        $(wildcard $(SYSCALLS_DIR)/sys/*.c)
+
+ASM_SRC = $(wildcard $(SRC_DIR)/*.asm)
+
+# Object files
+C_OBJ = $(patsubst %.c, %.o, $(C_SRC))
+ASM_OBJ = $(patsubst %.asm, %.o, $(ASM_SRC))
+OBJS += globals.o
+
+# Ensure directories exist
+$(shell mkdir -p $(DRIVERS_DIR) $(FS_DIR) $(ELF_DIR) $(SYSCALLS_DIR) $(SYSCALLS_DIR)/sys)
+
 # Default target
 all: $(ISO_IMAGE)
 
-# Create necessary directories
-$(shell mkdir -p $(OBJ_DIR)/libc $(OBJ_DIR)/drivers $(OBJ_DIR)/fs $(OBJ_DIR)/elf $(OBJ_DIR)/syscalls $(OBJ_DIR)/syscalls/sys)
+# Build the libc library
+libc:
+	$(MAKE) -C $(LIBC_DIR)
 
-# Build the kernel ELF
-$(KERNEL_ELF): $(C_OBJ) $(ASM_OBJ)
-	$(LD) $(LDFLAGS) -o $@ $(C_OBJ) $(ASM_OBJ)
+# Build the kernel
+$(KERNEL_ELF): libc $(C_OBJ) $(ASM_OBJ)
+	$(LD) $(LDFLAGS) -o $@ $(C_OBJ) $(ASM_OBJ) $(LIBC_LIB)
 
-# Pattern rule for C files
-$(OBJ_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
+# Pattern rules for compilation
+%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Pattern rule for ASM files
-$(OBJ_DIR)/%.o: %.asm
-	@mkdir -p $(dir $@)
+%.o: %.asm
 	$(AS) $(ASFLAGS) $< -o $@
 
 # Create the ISO image
 $(ISO_IMAGE): $(KERNEL_ELF) $(GRUB_CFG)
-	mkdir -p iso_root/boot/grub
-	cp $(KERNEL_ELF) iso_root/boot/kernel.elf
-	cp $(GRUB_CFG) iso_root/boot/grub/
-	mkdir -p iso_root/boot/grub/Particle
-	cp -r $(GRUB_THEME_DIR)/ iso_root/boot/grub/Particle
-	grub-mkrescue -o $(ISO_IMAGE) iso_root
+	mkdir -p $(ISO_DIR)/boot/grub
+	cp $(KERNEL_ELF) $(ISO_DIR)/boot/kernel.elf
+	cp $(GRUB_CFG) $(ISO_DIR)/boot/grub/
+	mkdir -p $(ISO_DIR)/boot/grub/Particle
+	cp -r $(GRUB_THEME_DIR)/ $(ISO_DIR)/boot/grub/Particle
+	grub-mkrescue -o $(ISO_IMAGE) $(ISO_DIR)
 
-run-bios:
-	qemu-system-i386 -cdrom myos.iso 
+# Run in QEMU
+run: $(ISO_IMAGE)
+	qemu-system-i386 -cdrom $(ISO_IMAGE)
 
-# Clean up (updated to remove obj directory)
+# Clean up
 clean:
 	rm -f $(C_OBJ) $(ASM_OBJ) $(KERNEL_ELF) $(ISO_IMAGE)
-	rm -rf iso_root $(OBJ_DIR)
+	rm -rf $(ISO_DIR)
+	$(MAKE) -C $(LIBC_DIR) clean
 
-psudo:
-# print everyting
-	echo $(C_SRC)
-	echo $(ASM_SRC)
-	echo $(C_OBJ)
-	echo $(ASM_OBJ)
-	echo $(NEWLIB_OBJS)
-	echo $(OBJS)
-	echo $(KERNEL_ELF)
+# Debug target - print all variables
+debug:
+	@echo "C_SRC = $(C_SRC)"
+	@echo "ASM_SRC = $(ASM_SRC)"
+	@echo "C_OBJ = $(C_OBJ)"
+	@echo "ASM_OBJ = $(ASM_OBJ)"
+	@echo "KERNEL_ELF = $(KERNEL_ELF)"
+
+run: $(ISO_IMAGE)
+	qemu-system-i386 -cdrom $(ISO_IMAGE) 
+
+.PHONY: all libc clean run debug
