@@ -15,7 +15,7 @@
 # Ignore directories
 uefi_image/
 iso/
-
+iso_image/
 # Ignore editor/IDE specific files
 .vscode/
 *.code-workspace
