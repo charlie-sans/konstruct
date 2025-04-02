@@ -10,21 +10,34 @@ char scancode_to_ascii(unsigned char scancode) {
     static int shift_pressed = 0;
     static int caps_lock_enabled = 0;
 
-    // Handle shift key press and release
+    // Handle key releases first (scancodes with high bit set)
+    if (scancode & 0x80) {
+        // Key release - high bit set
+        unsigned char released_key = scancode & 0x7F; // Clear the high bit to get the key code
+        
+        // Handle shift key release
+        if (released_key == 0x2A || released_key == 0x36) {
+            shift_pressed = 0;
+        }
+        
+        return 0; // No character output for key releases
+    }
+
+    // Handle key presses (scancodes without high bit)
+    // Special keys
     if (scancode == 0x2A || scancode == 0x36) { // Shift key press
         shift_pressed = 1;
         return 0;
-    } else if (scancode == 0xAA || scancode == 0xB6) { // Shift key release
-        shift_pressed = 0;
+    } else if (scancode == 0x3A) { // Caps Lock key press
+        caps_lock_enabled = !caps_lock_enabled;
+        return 0;
+    } else if (scancode == 0xE0) { // Extended key prefix
+        return 0;
+    } else if (scancode == 0x1D) { // Control key press
         return 0;
     }
 
-    // Handle Caps Lock
-    if (scancode == 0x3A) { // Caps Lock press
-        caps_lock_enabled = !caps_lock_enabled;
-       
-    }
-
+    // Handle standard keys
     const char scancode_to_ascii_map_lower[] = {
         0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0, 0,
         'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0, 0,
@@ -43,41 +56,18 @@ char scancode_to_ascii(unsigned char scancode) {
         return '\n';
     } else if (scancode == 0x0E) { // Backspace key
         return '\b';
-    } else if (scancode == 0x39) { // Space key
-        return ' ';
-    } else if (scancode == 0x3A) { // Caps Lock key
-        return 0; // No character output for Caps Lock
-    }
-    else if (scancode == 0xE0) { // Extended key prefix
-        return 0; // No character output for extended keys
-    } else if (scancode == 0xE1) { // Pause/Break key
-        return 0; // No character output for Pause/Break
-    } else if (scancode == 0xE2) { // Print Screen key
-        return 0; // No character output for Print Screen
-    } else if (scancode == 0xE3) { // Insert key
-        return 0; // No character output for Insert
-    } else if (scancode == 0xE4) { // Home key
-        return 0; // No character output for Home
-    } else if (scancode == 0xE5) { // Page Up key
-        return 0; // No character output for Page Up
-    } else if (scancode == 0xE6) { // Delete key
-        return 0; // No character output for Delete
-    } else if (scancode == 0xE7) { // End key
-        return 0; // No character output for End
-    } else if (scancode == 0xE8) { // Page Down key
-        return 0; // No character output for Page Down
-    } else if (scancode == 0xE9) { // Arrow keys and other special keys can be handled here as needed.
-        return 0; // Not a printable character
-    }
-    if (scancode < sizeof(scancode_to_ascii_map_lower)) {
+    } else if (scancode < sizeof(scancode_to_ascii_map_lower)) {
+        // Determine if we need upper or lower case
         if ((shift_pressed && !caps_lock_enabled) || (!shift_pressed && caps_lock_enabled)) {
             return scancode_to_ascii_map_upper[scancode];
         } else {
             return scancode_to_ascii_map_lower[scancode];
         }
     }
+    
     return 0;  // Not a printable character
 }
+
 extern unsigned char read_scan_code(void);
 
 // Add these globals for double buffering
@@ -467,21 +457,23 @@ int printf(const char* format, ...) {
 }
 
 char getchar(void) {
+    char c;
     unsigned char scancode;
 
-    // Wait for a valid character
+    // Keep reading scancodes until we get a valid character
     while (1) {
+        // Wait for a scan code 
         scancode = read_scan_code();
-
-        // Check if it's a key press (not a key release)
-        if (!(scancode & 0x80)) {
-            char c = scancode_to_ascii(scancode);
-            if (c) {
-                // Return the character without echoing it
-                // (echoing will be handled by the caller)
-                return c;
-            }
+        
+        // Convert to ASCII and check if it's a printable character
+        c = scancode_to_ascii(scancode);
+        
+        // If we got a printable character, return it
+        if (c != 0) {
+            return c;
         }
+        
+        // Otherwise, keep reading scancodes
     }
 }
 
