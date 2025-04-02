@@ -31,7 +31,7 @@ const char* clear(void) {
 }
 
 const char* version(void) {
-    return "MyOS version 0.1 with basic libc\n";
+    return "konstruct version 0.1 with basic libc\n";
 }
 
 const char* echo(void) {

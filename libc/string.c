@@ -261,3 +261,46 @@ size_t strcspn(const char* str, const char* reject) {
     
     return s - str;
 }
+
+// Convert an integer to a string with the specified base
+void int_to_string(int value, char* str, int base) {
+    // Handle 0 explicitly, otherwise empty string is printed
+    if (value == 0) {
+        str[0] = '0';
+        str[1] = '\0';
+        return;
+    }
+
+    // Handle negative numbers only for base 10
+    int negative = 0;
+    if (value < 0 && base == 10) {
+        negative = 1;
+        value = -value;
+    }
+
+    // Process individual digits
+    int i = 0;
+    while (value != 0) {
+        int remainder = value % base;
+        str[i++] = (remainder < 10) ? remainder + '0' : remainder - 10 + 'a';
+        value = value / base;
+    }
+
+    // Add negative sign if needed
+    if (negative)
+        str[i++] = '-';
+
+    // Null terminate string
+    str[i] = '\0';
+
+    // Reverse the string
+    int start = 0;
+    int end = i - 1;
+    while (start < end) {
+        char temp = str[start];
+        str[start] = str[end];
+        str[end] = temp;
+        start++;
+        end--;
+    }
+}

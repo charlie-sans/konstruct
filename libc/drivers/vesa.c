@@ -1,45 +1,30 @@
 #include "vga.h"
+#include "bios.h"  // Include our BIOS functions header
 #include "../libc/libc.h"
+#include "serial.h"
 
 // External functions from kernel.c
 extern void outb(unsigned short port, unsigned char data);
 extern unsigned char inb(unsigned short port);
 
-// BIOS interrupt function (defined in assembly)
-extern int int86(int interrupt, void* registers);
-
-// Registers structure for BIOS calls
-typedef struct {
-    uint32_t edi;
-    uint32_t esi;
-    uint32_t ebp;
-    uint32_t esp;
-    uint32_t ebx;
-    uint32_t edx;
-    uint32_t ecx;
-    uint32_t eax;
-    uint16_t flags;
-    uint16_t es;
-    uint16_t ds;
-    uint16_t fs;
-    uint16_t gs;
-    uint16_t ip;
-    uint16_t cs;
-    uint16_t sp;
-    uint16_t ss;
-} __attribute__((packed)) registers_t;
-
-// Simplified BIOS interrupt function
-// In a real implementation, this would need to be implemented in assembly
-static int bios_interrupt(int interrupt, registers_t* regs) {
-
-    printf("BIOS interrupt %x with AX=%x BX=%x CX=%x DX=%x\n", 
-           interrupt, regs->eax, regs->ebx, regs->ecx, regs->edx);
+// Function to call VESA BIOS functions using our BIOS interrupt handler
+void call_vesa_bios(uint16_t ax, uint16_t es, uint16_t di, uint16_t* result) {
+    // Create a regs16_t structure as defined in bios.h
+    regs16_t regs = {0};
     
-    // For testing purposes, simulate success
-    regs->eax = 0x004F; // VBE success
+    // Set up input registers
+    regs.ax = ax;
+    // ES:DI is a real mode segmented address - convert linear address to segment:offset
+    regs.es = es;
+    regs.di = di;
     
-    return 0; // Success
+    // Call BIOS interrupt 0x10 (video services)
+    vga_bios_call(&regs);
+    
+    // Get output values
+    if (result) {
+        *result = regs.ax;
+    }
 }
 
 // Get VBE controller information
@@ -55,19 +40,17 @@ int vga_get_vbe_controller_info(vbe_controller_info_t* info) {
     info->signature[3] = '2';
     
     // Set up registers for INT 0x10, AX=0x4F00 (get VBE controller info)
-    registers_t regs;
-    memset(&regs, 0, sizeof(registers_t));
-    regs.eax = 0x4F00;
-    regs.es = 0;  // In a real implementation, this would be the segment of the buffer
-    regs.edi = (uint32_t)info;  // In a real implementation, this would be the offset
+    regs16_t regs = {0};
+    regs.ax = 0x4F00;
+    // ES:DI points to the buffer - setting ES:DI in real mode
+    regs.es = (uint32_t)info >> 4;  // Segment 
+    regs.di = (uint32_t)info & 0xF; // Offset
     
     // Call BIOS interrupt
-    if (bios_interrupt(0x10, &regs) != 0) {
-        return 0; // Interrupt failed
-    }
+    vga_bios_call(&regs);
     
-    // Check if function was successful
-    if ((regs.eax & 0xFFFF) != 0x004F) {
+    // Check if function was successful (AX=0x004F)
+    if ((regs.ax & 0xFFFF) != 0x004F) {
         return 0; // VBE function failed
     }
     
@@ -86,20 +69,18 @@ int vga_get_vbe_mode_info(uint16_t mode, vbe_mode_info_t* info) {
     memset(info, 0, sizeof(vbe_mode_info_t));
     
     // Set up registers for INT 0x10, AX=0x4F01 (get VBE mode info)
-    registers_t regs;
-    memset(&regs, 0, sizeof(registers_t));
-    regs.eax = 0x4F01;
-    regs.ecx = mode;
-    regs.es = 0;  // In a real implementation, this would be the segment of the buffer
-    regs.edi = (uint32_t)info;  // In a real implementation, this would be the offset
+    regs16_t regs = {0};
+    regs.ax = 0x4F01;
+    regs.cx = mode;
+    // ES:DI points to the buffer - setting ES:DI in real mode
+    regs.es = (uint32_t)info >> 4;  // Segment
+    regs.di = (uint32_t)info & 0xF; // Offset
     
     // Call BIOS interrupt
-    if (bios_interrupt(0x10, &regs) != 0) {
-        return 0; // Interrupt failed
-    }
+    vga_bios_call(&regs);
     
-    // Check if function was successful
-    if ((regs.eax & 0xFFFF) != 0x004F) {
+    // Check if function was successful (AX=0x004F)
+    if ((regs.ax & 0xFFFF) != 0x004F) {
         return 0; // VBE function failed
     }
     
@@ -110,13 +91,13 @@ int vga_get_vbe_mode_info(uint16_t mode, vbe_mode_info_t* info) {
 int vga_set_vbe_mode(uint16_t mode, vbe_mode_info_t* mode_info) {
     // First get mode information
     if (!vga_get_vbe_mode_info(mode, mode_info)) {
-        printf("Failed to get mode info for VBE mode %x\n", mode);
+        serial_write_string(SERIAL_COM1_BASE, "Failed to get mode info for VBE mode\n");
         return 0;
     }
     
     // Check if mode is supported
     if (!(mode_info->attributes & 0x01)) {
-        printf("VBE mode %x is not supported\n", mode);
+        serial_write_string(SERIAL_COM1_BASE, "VBE mode is not supported\n");
         return 0;
     }
     
@@ -124,19 +105,16 @@ int vga_set_vbe_mode(uint16_t mode, vbe_mode_info_t* mode_info) {
     uint16_t linear_mode = mode | 0x4000;
     
     // Set up registers for INT 0x10, AX=0x4F02 (set VBE mode)
-    registers_t regs;
-    memset(&regs, 0, sizeof(regs));
-    regs.eax = 0x4F02;
-    regs.ebx = linear_mode;
+    regs16_t regs = {0};
+    regs.ax = 0x4F02;
+    regs.bx = linear_mode;
     
     // Call BIOS interrupt
-    if (bios_interrupt(0x10, &regs) != 0) {
-        return 0; // Interrupt failed
-    }
+    vga_bios_call(&regs);
     
-    // Check if function was successful
-    if ((regs.eax & 0xFFFF) != 0x004F) {
-        printf("VBE function failed with status %x\n", regs.eax);
+    // Check if function was successful (AX=0x004F)
+    if ((regs.ax & 0xFFFF) != 0x004F) {
+        serial_write_string(SERIAL_COM1_BASE, "VBE function failed\n");
         return 0;
     }
     
@@ -156,7 +134,6 @@ int vga_get_vbe_modes(uint16_t* modes, int max_modes) {
         return 0;
     }
     
-
     // For testing, return some common VBE modes
     if (max_modes >= 4) {
         modes[0] = VGA_MODE_640x480;

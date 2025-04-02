@@ -1,17 +1,18 @@
 #include "terminal.h"
 #include <libc.h>
 #include <fs/fs.h>
-
+#define VGA_WIDTH 80
+#define VGA_HEIGHT 25
 // External functions from kernel.c
 // Update the hardware cursor position
-void update_cursor(int cursor_x, int cursor_y) {
-    unsigned short position = cursor_y * 80 + cursor_x;
-    
-    // Tell the VGA controller we are setting the cursor
-    outb(0x3D4, 14);  // High byte
-    outb(0x3D5, position >> 8);
-    outb(0x3D4, 15);  // Low byte
-    outb(0x3D5, position & 0xFF);
+void update_cursor(int x, int y)
+{
+	uint16_t pos = y * VGA_WIDTH + x;
+
+	outb(0x3D4, 0x0F);
+	outb(0x3D5, (uint8_t) (pos & 0xFF));
+	outb(0x3D4, 0x0E);
+	outb(0x3D5, (uint8_t) ((pos >> 8) & 0xFF));
 }
 
 // Global terminal instance
@@ -32,11 +33,17 @@ const terminal_theme_t THEME_DEFAULT = {
     VGA_COLOR_LIGHT_GRAY   // border
 };
 
+#define cursor_start 0x0E
+#define cursor_end 0x0F
+
 // Initialize the terminal
 void terminal_init(void) {
     // Set default theme
-    terminal_set_theme(&THEME_DEFAULT);
+    terminal_set_theme(&THEME_DEFAULT);	outb(0x3D4, 0x0A);
+	outb(0x3D5, (inb(0x3D5) & 0xC0) | cursor_start);
 
+	outb(0x3D4, 0x0B);
+	outb(0x3D5, (inb(0x3D5) & 0xE0) | cursor_end);
     // Set default color attribute
 
 

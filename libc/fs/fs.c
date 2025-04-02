@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "bootdev.h"
 #include "iso9660.h"
+#include "../../globals.h"  // Add the include for globals.h
 
 // Global filesystem instance
 filesystem_t* fs = NULL;
@@ -32,8 +33,10 @@ static void fs_mount_init(void) {
     memset(mount_points, 0, sizeof(mount_points));
     num_mount_points = 0;
     
-    // Auto-mount the boot device if possible
-    if (bootdev_init() == BOOTDEV_SUCCESS) {
+    printf("Initializing boot device...\n");
+    int bootdev_result = bootdev_init();
+    if (bootdev_result == BOOTDEV_SUCCESS) {
+        printf("Boot device detected: %s\n", bootdev_get_type_name());
         // Mount at /cdrom for CDROM, /media for others
         const char* mount_path = (bootdev_get_type() == BOOT_DEV_CDROM) ? "/cdrom" : "/media";
         
@@ -43,26 +46,38 @@ static void fs_mount_init(void) {
         }
         
         // Mount the boot device
-        bootdev_mount(mount_path);
+        printf("Mounting boot device at %s...\n", mount_path);
+        int mount_result = bootdev_mount(mount_path);
+        if (mount_result == BOOTDEV_SUCCESS) {
+            set_boot_device_mounted(1); // Set global mount status
         
-        // Register the mount point
-        strcpy(mount_points[num_mount_points].path, mount_path);
-        mount_points[num_mount_points].type = bootdev_get_type();
-        
-        // Set appropriate filesystem driver functions
-        if (bootdev_get_type() == BOOT_DEV_CDROM) {
-            mount_points[num_mount_points].read_file = iso9660_read_file;
-            mount_points[num_mount_points].list_directory = iso9660_list_directory;
+            // Register the mount point
+            strcpy(mount_points[num_mount_points].path, mount_path);
+            mount_points[num_mount_points].type = bootdev_get_type();
+            
+            // Set appropriate filesystem driver functions
+            if (bootdev_get_type() == BOOT_DEV_CDROM) {
+                printf("Setting up ISO9660 filesystem drivers\n");
+                mount_points[num_mount_points].read_file = iso9660_read_file;
+                mount_points[num_mount_points].list_directory = iso9660_list_directory;
+            } else {
+                printf("Setting up generic filesystem drivers\n");
+                // For FAT or other filesystems, add appropriate drivers
+                // For now, we'll just use NULL placeholders
+                mount_points[num_mount_points].read_file = NULL;
+                mount_points[num_mount_points].list_directory = NULL;
+            }
+            
+            num_mount_points++;
+            
+            printf("Mounted boot device at %s\n", mount_path);
         } else {
-            // For FAT or other filesystems, add appropriate drivers
-            // For now, we'll just use NULL placeholders
-            mount_points[num_mount_points].read_file = NULL;
-            mount_points[num_mount_points].list_directory = NULL;
+            printf("Failed to mount boot device (error code: %d)\n", mount_result);
         }
-        
-        num_mount_points++;
-        
-        printf("Mounted boot device at %s\n", mount_path);
+    }
+    else {
+        printf("No boot device found (error code: %d)\n", bootdev_result);
+        printf("Check that bootdev_init() is properly implemented and returning BOOTDEV_SUCCESS\n");
     }
 }
 
@@ -768,6 +783,69 @@ int fs_check_mount_point(const char* path, const char** rel_path, mount_point_t*
     return 0;
 }
 
+// find_mount_point function to check if a path is under a mount point
+int find_mount_point(const char* path, const char** rel_path, mount_point_t** mount) {
+    for (int i = 0; i < num_mount_points; i++) {
+        // Check if path starts with mount point path
+        if (strncmp(path, mount_points[i].path, strlen(mount_points[i].path)) == 0) {
+            // Path is under this mount point
+            *rel_path = path + strlen(mount_points[i].path);
+            *mount = &mount_points[i];
+            return 1;
+        }
+    }
+    
+    // Not under a mount point
+    return 0;
+}
+
+// Enhance fs_read_file to support mounted filesystems
+int fs_read_file(const char* path, void* buffer, size_t size) {
+    if (!fs || !path || !buffer) return FS_ERR_INVALID;
+    
+    // Check if the path is on a mounted filesystem
+    const char* rel_path;
+    mount_point_t* mount;
+    
+    if (find_mount_point(path, &rel_path, &mount)) {
+        // This path is on a mounted filesystem
+        if (mount->read_file) {
+            return mount->read_file(rel_path, buffer, size);
+        } else {
+            return -100; // Unsupported operation
+        }
+    }
+    
+    // If not on a mounted filesystem, use the in-memory fs
+    return FS_ERR_NOT_FOUND;
+}
+
+// Add a function to load and execute a program from the filesystem
+int fs_load_program(const char* path, void* buffer, size_t* size) {
+    if (!fs || !path || !buffer || !size) return FS_ERR_INVALID;
+    
+    // Check if boot device is mounted
+    if (!is_boot_device_mounted()) {
+        printf("No boot device mounted. Cannot load program.\n");
+        return FS_ERR_NOT_FOUND;
+    }
+    
+    // Check if the path is on a mounted filesystem
+    const char* rel_path;
+    mount_point_t* mount;
+    
+    if (find_mount_point(path, &rel_path, &mount)) {
+        // This path is on a mounted filesystem
+        if (mount->read_file) {
+            return mount->read_file(rel_path, buffer, *size);
+        } else {
+            return -100;
+        }
+    }
+    
+    return FS_ERR_NOT_FOUND;
+}
+
 // Create some example files and directories
 void fs_create_example_files(void) {
     // Create some directories
@@ -781,7 +859,7 @@ void fs_create_example_files(void) {
     fs_create("/home/user/hello.txt");
     
     // Write content to files
-    const char* motd = "Welcome to MyOS!\nThis is a simple in-memory filesystem.\n";
+    const char* motd = "Welcome to konstruct!\nThis is a simple in-memory filesystem.\n";
     fs_write("/etc/motd", motd, strlen(motd), 0);
     
     const char* hello = "Hello, world!\nThis is a test file.\n";

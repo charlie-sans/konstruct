@@ -1,7 +1,10 @@
 #include "vga.h"
 #include "../libc/libc.h"
 #include "../libc/stdfont.h"  // Add this include for font-related functions
-
+#include "serial.h"
+#include <stdlib.h>
+#include <drivers/bios.h>
+#include <globals.c>
 // External functions from kernel.c
 extern void outb(unsigned short port, unsigned char data);
 extern unsigned char inb(unsigned short port);
@@ -17,8 +20,9 @@ static int console_y = 0;
 static uint8_t bg_color = VGA_COLOR_BLUE;
 
 // Enhanced graphics terminal implementation
-static int terminal_width = 40;  // For 320x200 (40 chars per line with 8px font)
-static int terminal_height = 25; // For 320x200 (25 lines with 8px font)
+static int terminal_width = 1920;  // For 320x200 (80 chars with 8px font)
+static int terminal_height = 1080; // For 320x200 (25 lines with 8px font)
+static int terminal_bpp = 8;      // 256 colors (8 bits per pixel)
 static char* terminal_buffer = NULL;
 static uint8_t terminal_fg_color = VGA_COLOR_WHITE;
 static uint8_t terminal_bg_color = VGA_COLOR_BLUE;
@@ -84,6 +88,14 @@ static void set_default_palette(void) {
 
 // Set VGA Mode 13h (320x200 256 colors) using direct port access
 static void set_mode_13h(void) {
+    // Use int 0x10 as a primary method to set mode 13h
+    regs16_t regs = {0};
+    regs.ax = 0x0013;  // AH=0x00 (set video mode), AL=0x13 (graphics mode 320x200)
+    vga_bios_call(&regs);
+    
+    // Short delay to allow mode change to complete
+    vga_delay();
+    
     // Reset the VGA controller
     outb(VGA_MISC_WRITE, 0x63);
     
@@ -160,10 +172,22 @@ static void set_mode_13h(void) {
     // Initialize console state
     console_x = 0;
     console_y = 0;
+    
+    // Update the global state
+    set_is_graphics_mode(1);
 }
 
 // Set VGA Mode 3 (80x25 text mode) using direct port access
 static void set_mode_3h(void) {
+    // First try BIOS interrupt as a fallback method
+    __asm__ volatile (
+        "mov $0x03, %%ax\n"  // Text mode 3 (80x25 16 color)
+        "int $0x10\n"        // BIOS video interrupt
+        ::: "ax"
+    );
+    
+    // Then continue with direct register programming
+    
     // Reset the VGA controller to a known state first
     outb(0x3C2, 0x67);  // Set miscellaneous output register
     
@@ -187,50 +211,52 @@ static void set_mode_3h(void) {
     outb(0x3C4, 0x00);  // Sequencer index: Reset
     outb(0x3C5, 0x03);  // Clear reset bits
     
-    // Graphics Controller
-    for (int i = 0; i < 9; i++) {
-        outb(0x3CE, i);  // Graphics controller index
-        outb(0x3CF, 0);  // Set register to 0
-    }
-    
-    // Explicitly set graphics mode register for text mode
-    outb(0x3CE, 0x05);  // Graphics mode register
-    outb(0x3CF, 0x10);  // Text mode, odd/even addressing
-    
-    // Explicitly set miscellaneous register
-    outb(0x3CE, 0x06);  // Misc register
-    outb(0x3CF, 0x0E);  // Text mode addressing
-    
-    // Set CRT controller registers
-    // Unlock CRT registers 0-7
+    // Make sure we set the correct CRT controller registers
+    // Protect registers 0-7
     outb(0x3D4, 0x11);  // CRTC: Vertical retrace end register
     uint8_t value = inb(0x3D5) & 0x7F;  // Get current value and clear bit 7
-    outb(0x3D5, value);  // Write new value
+    outb(0x3D5, value);  // Write new value to unprotect
     
-    // Text mode settings for CRTC
+    // Set text mode with explicit values
     static const uint8_t crtc_values[] = {
         0x5F, 0x4F, 0x50, 0x82, 0x55, 0x81, 0xBF, 0x1F,
         0x00, 0x4F, 0x0D, 0x0E, 0x00, 0x00, 0x00, 0x00,
         0x9C, 0x8E, 0x8F, 0x28, 0x1F, 0x96, 0xB9, 0xA3
     };
     
-    for (int i = 0; i < sizeof(crtc_values); i++) {
-        outb(0x3D4, i);  // CRTC index
-        outb(0x3D5, crtc_values[i]);  // CRTC data
+    // Write CRTC registers
+    for (int i = 0; i < sizeof(crtc_values)/sizeof(crtc_values[0]); i++) {
+        outb(0x3D4, i);         // Select register
+        outb(0x3D5, crtc_values[i]); // Write value
     }
     
-    // Reset attribute controller flip-flop and enable video output
-    inb(0x3DA);  // Reset flip-flop to index state
-    outb(0x3C0, 0x20);  // Enable video display
+    // Explicitly set attribute controller registers for text mode
+    static const uint8_t ac_regs[21] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x0C, 0x00, 0x0F, 0x08, 0x00
+    };
     
-    // Reset the palette
-    for (int i = 0; i < 16; i++) {
-        outb(0x3C0, i);  // Attribute controller index
-        outb(0x3C0, i);  // Set palette entry to match index
+    for (int i = 0; i < sizeof(ac_regs)/sizeof(ac_regs[0]); i++) {
+        inb(VGA_INSTAT_READ);  // Reset attribute controller flip-flop
+        outb(VGA_AC_INDEX, i);
+        outb(VGA_AC_WRITE, ac_regs[i]);
     }
     
-    // Clear the screen
+    // Enable video output
+    inb(VGA_INSTAT_READ);
+    outb(VGA_AC_INDEX, 0x20);
+    
+    // Force cursor visible
+    outb(0x3D4, 0x0A);
+    outb(0x3D5, (inb(0x3D5) & 0xC0) | 0x0E);  // Cursor start
+    outb(0x3D4, 0x0B);
+    outb(0x3D5, (inb(0x3D5) & 0xE0) | 0x0F);  // Cursor end
+    
+    // Update pointer to framebuffer 
     uint16_t* fb = (uint16_t*)0xB8000;
+    
+    // Clear screen with default attributes (light gray on black)
     for (int i = 0; i < 80 * 25; i++) {
         fb[i] = 0x0720;  // White on black space
     }
@@ -241,8 +267,13 @@ static void set_mode_3h(void) {
     outb(0x3D4, 0x0E);  // CRTC: Cursor high byte
     outb(0x3D5, 0);
     
-    // Log the mode change
-    printf("VGA Mode 3h (80x25 text mode) has been set\n");
+    // Ensure we properly clean up any remaining graphics mode state
+    if (terminal_buffer) {
+        vga_terminal_cleanup();
+    }
+    
+    // Log the mode change to serial port
+    serial_write_string(SERIAL_COM1_BASE, "VGA Mode 3h (80x25 text mode) has been set\n");
 }
 
 // Set a specific VGA mode
@@ -251,6 +282,13 @@ int vga_set_mode(int mode) {
     if (!vga_screen.text_mode && terminal_buffer) {
         vga_terminal_cleanup();
     }
+    
+    // Add some safety checks
+    serial_write_string(SERIAL_COM1_BASE, "Setting VGA mode: ");
+    char mode_str[8];
+    int_to_string(mode, mode_str, 16);
+    serial_write_string(SERIAL_COM1_BASE, mode_str);
+    serial_write_string(SERIAL_COM1_BASE, "\n");
 
     switch (mode) {
         case VGA_MODE_TEXT_80x25:
@@ -265,6 +303,11 @@ int vga_set_mode(int mode) {
             
             // Set text mode using direct register manipulation
             set_mode_3h();
+            
+            // Update globals
+            set_is_graphics_mode(0);
+            set_screen_width(80);
+            set_screen_height(25);
             
             return 1;
             
@@ -281,6 +324,11 @@ int vga_set_mode(int mode) {
             // Set graphics mode using direct register manipulation
             set_mode_13h();
             
+            // Update globals
+            set_is_graphics_mode(1);
+            set_screen_width(320);
+            set_screen_height(200);
+            
             // Make sure the framebuffer is completely cleared
             {
                 uint8_t* fb = (uint8_t*)vga_screen.framebuffer;
@@ -292,7 +340,10 @@ int vga_set_mode(int mode) {
             // Initialize the graphics terminal
             vga_terminal_init();
             
+            serial_write_string(SERIAL_COM1_BASE, "VGA Mode 13h initialized successfully\n");
+            
             return 1;
+        
         case VGA_MODE_640x480:
             printf("Switching to VGA graphics mode (640x480).\n");
             // Update our screen information
@@ -482,14 +533,14 @@ void vga_draw_char(int x, int y, char c, uint8_t color) {
     
     // Make sure the character index is valid
     unsigned char ch = (unsigned char)c;
-    if (ch < font->first_char || ch > font->last_char) {
-        // Replace unprintable characters with a visible placeholder
-        if (ch != '\0' && ch != '\n' && ch != '\r' && ch != '\t' && ch != '\b') {
-            ch = '.'; // Default fallback character
-        } else {
-            return; // Skip actual control characters
-        }
-    }
+    // if (ch < font->first_char || ch > font->last_char) {
+    //     // Replace unprintable characters with a visible placeholder
+    //     if (ch != '\0' && ch != '\n' && ch != '\r' && ch != '\t' && ch != '\b') {
+    //         ch = '.'; // Default fallback character
+    //     } else {
+    //         return; // Skip actual control characters
+    //     }
+    // }
     
     // Clear the character background area
     vga_draw_filled_rect(x, y, font->width, font->height, bg_color);
@@ -519,7 +570,11 @@ void vga_draw_string(int x, int y, const char* str, uint8_t color) {
 void vga_console_init(void) {
     console_x = 0;
     console_y = 0;
+    bg_color = VGA_COLOR_BLUE;
     vga_console_clear(bg_color);
+    
+    // Log to serial port
+    serial_write_string(SERIAL_COM1_BASE, "Graphics console initialized\n");
 }
 
 // Clear the console in graphics mode

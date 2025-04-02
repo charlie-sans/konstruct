@@ -64,7 +64,11 @@ unsigned char read_scan_code(void);
 /* Screen mode functions */
 int set_vbe_mode(int width, int height, int bpp);
 int vga_set_mode(int mode);
-
+//set_screen_width(int width);
+void set_screen_height(int height);
+void set_screen_width(int width);
+int get_screen_height(void);
+void set_is_graphics_mode(int mode);
 /* System control functions */
 void reboot(void);
 void soft_reboot(void);
@@ -85,10 +89,10 @@ void vga_terminal_set_color(uint8_t fg, uint8_t bg);
 /* Console output function */
 void console_write(const char* str);
 
-/* Graphics functions */
-void vga_draw_filled_rect(int x, int y, int width, int height, uint8_t color);
-int font_draw_string(const Font* font, int x, int y, const char* str, uint32_t color, uint32_t bgcolor);
-const Font* font_get_default(void);
+// /* Graphics functions */
+// void vga_draw_filled_rect(int x, int y, int width, int height, uint8_t color);
+// int font_draw_string(const Font* font, int x, int y, const char* str, uint32_t color, uint32_t bgcolor);
+// // const Font* font_get_default(void);
 
 /* Filesystem functions */
 int fs_listdir(const char* path, char* buffer, size_t buffer_size);

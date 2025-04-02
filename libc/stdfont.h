@@ -183,8 +183,7 @@ uint32_t bmp_get_pixel(const uint8_t* data, int x, int y);
 Font* bmp_to_font(const uint8_t* bmp_data, int char_width, int char_height, 
                  char first_char, int chars_per_row, uint8_t* out_data, size_t out_size);
 
-// Example of including a font directly in the executable
-// This would typically be defined in a .c file
+
 #ifdef FONT_IMPLEMENTATION
 // 8x8 default font data - Simple ASCII font
 const uint8_t default_font_data[] = {

@@ -4,6 +4,7 @@
 CC = gcc
 AS = nasm
 LD = ld
+AR = ar
 
 # Cross-compiler detection for macOS (commented out for now)
 UNAME_S := $(shell uname -s)
@@ -26,7 +27,7 @@ GRUB_THEME_DIR = $(GRUB_DIR)/Particle
 
 # Output files
 KERNEL_ELF = kernel.elf
-ISO_IMAGE = myos.iso
+ISO_IMAGE = konstruct.iso
 
 # Compiler and linker flags
 CFLAGS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc \
@@ -47,12 +48,25 @@ C_SRC = $(wildcard $(SRC_DIR)/kernel.c) \
         $(wildcard $(SYSCALLS_DIR)/*.c) \
         $(wildcard $(SYSCALLS_DIR)/sys/*.c)
 
-ASM_SRC = $(wildcard $(SRC_DIR)/*.asm)
+# Include assembly files from all directories
+ASM_SRC = $(wildcard $(SRC_DIR)/*.asm) \
+         $(wildcard $(DRIVERS_DIR)/*.S) \
+         $(wildcard $(DRIVERS_DIR)/*.s) \
+         $(wildcard $(DRIVERS_DIR)/*.asm)
 
 # Object files
 C_OBJ = $(patsubst %.c, %.o, $(C_SRC))
-ASM_OBJ = $(patsubst %.asm, %.o, $(ASM_SRC))
+ASM_OBJ = $(patsubst %.asm, %.o, $(wildcard $(SRC_DIR)/*.asm)) \
+          $(patsubst %.S, %.o, $(wildcard $(DRIVERS_DIR)/*.S)) \
+          $(patsubst %.s, %.o, $(wildcard $(DRIVERS_DIR)/*.s)) \
+          $(patsubst %.asm, %.o, $(wildcard $(DRIVERS_DIR)/*.asm))
 OBJS += globals.o
+
+# Make sure this list includes globals.o
+KERNEL_OBJS = \
+    kernel.o \
+    globals.o \
+    entry.o
 
 # Ensure directories exist
 $(shell mkdir -p $(DRIVERS_DIR) $(FS_DIR) $(ELF_DIR) $(SYSCALLS_DIR) $(SYSCALLS_DIR)/sys)
@@ -61,6 +75,14 @@ $(shell mkdir -p $(DRIVERS_DIR) $(FS_DIR) $(ELF_DIR) $(SYSCALLS_DIR) $(SYSCALLS_
 all: $(ISO_IMAGE)
 
 # Build the libc library
+LIBC_OBJS += globals.o
+
+libc/libc.a: $(LIBC_OBJS) globals.o
+	$(AR) rcs $@ $^
+
+globals.o: globals.c globals.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
 libc:
 	$(MAKE) -C $(LIBC_DIR)
 
@@ -68,11 +90,23 @@ libc:
 $(KERNEL_ELF): libc $(C_OBJ) $(ASM_OBJ)
 	$(LD) $(LDFLAGS) -o $@ $(C_OBJ) $(ASM_OBJ) $(LIBC_LIB)
 
+# Ensure globals.o is built
+globals.o: globals.c globals.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # Pattern rules for compilation
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %.o: %.asm
+	$(AS) $(ASFLAGS) $< -o $@
+
+# Add support for GNU Assembly format (.S files with preprocessor)
+%.o: %.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Add support for raw assembly files
+%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
 # Create the ISO image
@@ -102,7 +136,5 @@ debug:
 	@echo "ASM_OBJ = $(ASM_OBJ)"
 	@echo "KERNEL_ELF = $(KERNEL_ELF)"
 
-run: $(ISO_IMAGE)
-	qemu-system-i386 -cdrom $(ISO_IMAGE) 
 
 .PHONY: all libc clean run debug

@@ -12,7 +12,7 @@ static char* program_break = (char*)0x800000; // 8MB mark
 
 // System call handler functions
 static int sys_exit(int status) {
-    // In a real multi-process system, this would terminate the process
+
     // For now, just return to the caller with the exit status
     return status;
 }

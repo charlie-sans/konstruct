@@ -22,7 +22,7 @@ fi
 
 # Copy the OS image to the USB drive
 echo "Writing OS image to $USB_DEVICE..."
-dd if=myos.img of=$USB_DEVICE bs=512 conv=notrunc
+dd if=konstruct.img of=$USB_DEVICE bs=512 conv=notrunc
 sync
 
 echo "Done! Your bootable USB drive is ready."

@@ -32,6 +32,20 @@ int serial_is_transmit_fifo_empty(uint16_t com) {
 
 // Write a character to the serial port
 void serial_write_char(uint16_t com, char c) {
+    // Handle special characters
+    if (c == '\n') {
+        // For newline, also send a carriage return for proper terminal behavior
+        while (!serial_is_transmit_fifo_empty(com))
+            ; // Wait until the transmit FIFO is empty
+        outb(SERIAL_DATA_PORT(com), '\r');
+        
+        while (!serial_is_transmit_fifo_empty(com))
+            ; // Wait until the transmit FIFO is empty
+        outb(SERIAL_DATA_PORT(com), '\n');
+        return;
+    }
+    
+    // For normal characters or other control characters
     while (!serial_is_transmit_fifo_empty(com))
         ; // Wait until the transmit FIFO is empty
     outb(SERIAL_DATA_PORT(com), c);

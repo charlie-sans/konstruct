@@ -62,15 +62,7 @@ typedef struct {
     int text_mode;   // 1 if in text mode, 0 if in graphics mode
 } vga_screen_t;
 
-// VBE controller information structure
-typedef struct {
-    char signature[4];          // "VESA"
-    uint16_t version;           // VBE version
-    uint32_t oem_string_ptr;    // Pointer to OEM string
-    uint32_t capabilities;      // Capabilities
-    uint32_t video_modes_ptr;   // Pointer to video modes list
-    uint16_t total_memory;      // Memory size in 64K blocks
-} __attribute__((packed)) vbe_controller_info_t;
+
 
 // VBE mode information structure
 typedef struct {
@@ -113,6 +105,18 @@ typedef struct {
     uint8_t reserved1[206];     // Remainder of ModeInfoBlock
 } __attribute__((packed)) vbe_mode_info_t;
 
+// VESA-related declarations
+typedef struct {
+    char signature[4];         // "VESA"
+    uint16_t version;          // VBE version
+    uint32_t oem_string_ptr;   // Pointer to OEM string
+    uint8_t capabilities[4];   // Capabilities
+    uint32_t video_modes_ptr;  // Pointer to video modes list
+    uint16_t total_memory;     // Memory size in 64K blocks
+    uint8_t reserved[236];     // Reserved
+} __attribute__((packed)) vbe_controller_info_t;
+
+
 // Function prototypes
 void vga_init(void);
 int vga_set_mode(int mode);
@@ -143,6 +147,9 @@ int vga_get_vbe_modes(uint16_t* modes, int max_modes);
 
 // Function to get VBE controller information
 int vga_get_vbe_controller_info(vbe_controller_info_t* info);
+
+// Function to get VBE mode information
+int vga_get_vbe_mode_info(uint16_t mode, vbe_mode_info_t* info);
 
 // Function to draw to higher resolution modes
 void vga_draw_pixel_vbe(int x, int y, uint32_t color);

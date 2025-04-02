@@ -21,11 +21,10 @@ typedef unsigned short uint16_t;
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "globals.h"
+
 
 // Define globals directly in kernel.c if linking isn't working
-int screen_width = DEFAULT_WIDTH;
-int screen_height = DEFAULT_HEIGHT;
+
 // Multiboot header
 __attribute__((section(".multiboot")))
 const unsigned int multiboot_header[] = {
@@ -71,10 +70,10 @@ void kernel_main(void) {
     
     // Initialize filesystem
     fs_init();
-
+    
     // Print a welcome message
     clear_screen();
-    print_string("Welcome to MyOS with VGA Graphics, BMP Fonts, and Filesystem!\n");
+    print_string("Welcome to konstruct with VGA Graphics, BMP Fonts, and Filesystem!\n");
     print_string("Type 'help' for a list of commands.\n");
 
     // Start the shell

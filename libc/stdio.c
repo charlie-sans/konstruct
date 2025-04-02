@@ -2,6 +2,7 @@
 #include <stddef.h>
 
 #include <globals.h>
+#include "drivers/serial.h"
 #define screen_width 80
 #define screen_height 25
 
@@ -79,10 +80,76 @@ char scancode_to_ascii(unsigned char scancode) {
 }
 extern unsigned char read_scan_code(void);
 
+// Add these globals for double buffering
+static char text_buffer[screen_height][screen_width][2]; // [row][col][char/attribute]
+static char* video_memory = (char*)VIDEO_MEMORY;
+static int buffer_initialized = 0;
+static int needs_update = 0;
+
+// Initialize the text buffer
+static void init_text_buffer() {
+    if (buffer_initialized) return;
+    
+    // Clear the buffer
+    for (int y = 0; y < screen_height; y++) {
+        for (int x = 0; x < screen_width; x++) {
+            text_buffer[y][x][0] = ' ';
+            text_buffer[y][x][1] = WHITE_ON_BLACK;
+        }
+    }
+    
+    // Also clear the actual screen
+    for (int i = 0; i < screen_width * screen_height * 2; i += 2) {
+        video_memory[i] = ' ';
+        video_memory[i + 1] = WHITE_ON_BLACK;
+    }
+    
+    buffer_initialized = 1;
+}
+
+// Flush the buffer to screen - only copy what has changed
+static void flush_buffer() {
+    if (!needs_update) return;
+    
+    for (int y = 0; y < screen_height; y++) {
+        for (int x = 0; x < screen_width; x++) {
+            int offset = (y * screen_width + x) * 2;
+            
+            // Only update if the character or attribute has changed
+            if (video_memory[offset] != text_buffer[y][x][0] || 
+                video_memory[offset + 1] != text_buffer[y][x][1]) {
+                
+                video_memory[offset] = text_buffer[y][x][0];
+                video_memory[offset + 1] = text_buffer[y][x][1];
+            }
+        }
+    }
+    
+    needs_update = 0;
+}
+
 // Function to print a single character
 void print_char(char c) {
     static int cursor_x = 0, cursor_y = 0;
-    char* video_memory = (char*)VIDEO_MEMORY;
+    static int initialized = 0;
+    static int serial_initialized = 0;
+    
+    // Initialize serial port if needed
+    if (!serial_initialized) {
+        serial_init(SERIAL_COM1_BASE);
+        serial_initialized = 1;
+    }
+
+    // Send character to serial port
+    serial_write_char(SERIAL_COM1_BASE, c);
+    
+    // Initialize buffer if needed
+    if (!initialized) {
+        init_text_buffer();
+        cursor_x = 0;
+        cursor_y = 0;
+        initialized = 1;
+    }
     
     if (c == '\n') {
         cursor_x = 0;
@@ -90,41 +157,79 @@ void print_char(char c) {
     } else if (c == '\b') {
         if (cursor_x > 0) {
             cursor_x--;
-            int offset = (cursor_y * 80 + cursor_x) * 2;
-            video_memory[offset] = ' ';
-            video_memory[offset + 1] = WHITE_ON_BLACK;
+            text_buffer[cursor_y][cursor_x][0] = ' ';
+            text_buffer[cursor_y][cursor_x][1] = WHITE_ON_BLACK;
+            needs_update = 1;
         }
+    } else if (c == '\0') {
+        // Null character just updates the cursor
     } else {
-        int offset = (cursor_y * 80 + cursor_x) * 2;
-        video_memory[offset] = c;
-        video_memory[offset + 1] = WHITE_ON_BLACK;
+        text_buffer[cursor_y][cursor_x][0] = c;
+        text_buffer[cursor_y][cursor_x][1] = WHITE_ON_BLACK;
         cursor_x++;
-        if (cursor_x >= 80) {
+        needs_update = 1;
+        
+        if (cursor_x >= screen_width) {
             cursor_x = 0;
             cursor_y++;
         }
     }
 
     if (cursor_y >= screen_height) {
-        // Scroll the screen up by one line
-        for (int i = 0; i < (screen_height - 1) * 80 * 2; i++) {
-            video_memory[i] = video_memory[i + 80  * 2];
+        // Scroll the buffer up by one line
+        for (int y = 0; y < screen_height - 1; y++) {
+            for (int x = 0; x < screen_width; x++) {
+                text_buffer[y][x][0] = text_buffer[y + 1][x][0];
+                text_buffer[y][x][1] = text_buffer[y + 1][x][1];
+            }
         }
 
         // Clear the last line
-        for (int i = (screen_height - 1) * 80 * 2; 
-             i < screen_height * 80 * 2; i += 2) {
-            video_memory[i] = ' ';
-            video_memory[i + 1] = WHITE_ON_BLACK;
+        for (int x = 0; x < screen_width; x++) {
+            text_buffer[screen_height - 1][x][0] = ' ';
+            text_buffer[screen_height - 1][x][1] = WHITE_ON_BLACK;
         }
 
         // Move cursor up one row
         cursor_y = screen_height - 1;
+        needs_update = 1;
     }
 
     // Update the hardware cursor
     update_cursor(cursor_x, cursor_y);
+    
+    // Flush buffer to screen
+    flush_buffer();
 }
+void kernel_putchar(char c) {
+    print_char(c); // Use the existing print_char function
+}
+
+// Function to print a string
+void print_string(const char* str) {
+    while (*str) {
+        print_char(*str++);
+    }
+}
+// Clear the screen - now using the buffer
+void clear_screen(void) {
+    // Clear the buffer
+    for (int y = 0; y < screen_height; y++) {
+        for (int x = 0; x < screen_width; x++) {
+            text_buffer[y][x][0] = ' ';
+            text_buffer[y][x][1] = WHITE_ON_BLACK;
+        }
+    }
+    
+    needs_update = 1;
+    
+    // Reset cursor to 0,0
+    update_cursor(0, 0);
+    
+    // Flush buffer to screen to ensure changes take effect immediately
+    flush_buffer();
+}
+
 // Function to apply ANSI effects programmatically
 static void apply_ansi_effect(char cmd, int* params, int param_count) {
     switch (cmd) {
