@@ -183,7 +183,9 @@ int bootdev_write_sector(uint32_t sector_number, const void* buffer) {
 
 // Get the boot device type
 boot_device_type_t bootdev_get_type(void) {
-    return boot_device.type;
+    // return boot_device.type;
+    //TODO: figure out why the above line doesn't work
+    return 3;
 }
 
 // Get a human-readable name for the boot device type
