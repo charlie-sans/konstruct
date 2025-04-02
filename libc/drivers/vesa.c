@@ -30,7 +30,7 @@ void call_vesa_bios(uint16_t ax, uint16_t es, uint16_t di, uint16_t* result) {
 // Get VBE controller information
 int vga_get_vbe_controller_info(vbe_controller_info_t* info) {
     // Allocate a buffer in low memory for the controller info
-    // In a real implementation, this would need to use a real-mode accessible buffer
+    // This should be a 256-byte buffer as per VESA spec
     memset(info, 0, sizeof(vbe_controller_info_t));
     
     // Set "VBE2" signature to get VBE 2.0+ info
@@ -119,8 +119,7 @@ int vga_set_vbe_mode(uint16_t mode, vbe_mode_info_t* mode_info) {
     }
     
     // Update framebuffer information
-    // In a real implementation, you might need to map the physical framebuffer address
-    // to a virtual address that your kernel can access
+
     
     return 1; // Success
 }

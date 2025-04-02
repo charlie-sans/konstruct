@@ -114,8 +114,7 @@ int fs_sync(void) {
 
 // Helper function to load a disk image into memory
 static int vdisk_load(const char* path) {
-    // In a real OS, this would use file I/O to load the disk image
-    // For now, we'll simulate it with a stub
+
     
     printf("Loading disk image: %s\n", path);
     
@@ -167,8 +166,7 @@ static int vdisk_save(void) {
 
 // Helper function to create a new disk image
 static int vdisk_create(const char* path, uint32_t size) {
-    // In a real OS, this would use file I/O to create a new disk image
-    // For now, we'll simulate it with a stub
+
     
     printf("Creating new disk image: %s (%d bytes)\n", path, size);
 

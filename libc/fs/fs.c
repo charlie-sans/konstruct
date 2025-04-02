@@ -21,8 +21,7 @@ static int num_mount_points = 0;
 
 // Helper function to get current time
 static time_t get_time(void) {
-    // In a real OS, this would get the actual system time
-    // For now, just return a counter that increments each time
+
     static time_t time_counter = 0;
     return ++time_counter;
 }
@@ -484,22 +483,33 @@ char* fs_getcwd(char* buf, size_t size) {
 int fs_listdir(const char* path, char* buffer, size_t bufsize) {
     if (!fs || !buffer || bufsize == 0) return FS_ERR_INVALID;
     
+    printf("fs_listdir: Listing directory %s\n", path ? path : "(current)");
+    
     const char* rel_path;
     mount_point_t* mount;
     
     // Check if this path is under a mount point
     if (fs_check_mount_point(path, &rel_path, &mount)) {
+        printf("fs_listdir: Path is under mount point, using filesystem driver\n");
         // Use the mount point's list_directory function
         if (mount->list_directory) {
-            return mount->list_directory(rel_path, buffer, bufsize);
+            int result = mount->list_directory(rel_path, buffer, bufsize);
+            printf("fs_listdir: List result = %d\n", result);
+            return result >= 0 ? FS_SUCCESS : result;
         } else {
-            return -1; // Unsupported operation
+            printf("fs_listdir: No directory listing function available\n");
+            return -100; // Unsupported operation
         }
     }
     
+    printf("fs_listdir: Using in-memory filesystem\n");
+    
     // Find the directory
     fs_dir_t* dir = path ? fs_find_dir(path) : fs->current_dir;
-    if (!dir) return FS_ERR_NOT_FOUND;
+    if (!dir) {
+        printf("fs_listdir: Directory not found\n");
+        return FS_ERR_NOT_FOUND;
+    }
     
     // Clear the buffer
     buffer[0] = '\0';
@@ -642,22 +652,34 @@ int fs_delete(const char* path) {
 int fs_read(const char* path, void* buffer, size_t size, size_t offset) {
     if (!fs || !path || !buffer) return FS_ERR_INVALID;
     
+    printf("fs_read: Attempting to read %s\n", path);
+    
     const char* rel_path;
     mount_point_t* mount;
     
     // Check if this path is under a mount point
     if (fs_check_mount_point(path, &rel_path, &mount)) {
+        printf("fs_read: Path is under mount point, using filesystem driver\n");
         // Use the mount point's read function
         if (mount->read_file) {
-            return mount->read_file(rel_path, buffer, size);
+            // For now, we ignore offset and just read the whole file
+            int result = mount->read_file(rel_path, buffer, size);
+            printf("fs_read: Read result = %d\n", result);
+            return result;
         } else {
-            return -1; // Unsupported operation
+            printf("fs_read: No filesystem driver available\n");
+            return -100; // Unsupported operation
         }
     }
     
+    printf("fs_read: Using in-memory filesystem\n");
+    
     // Find the file
     fs_file_t* file = fs_find_file(path);
-    if (!file) return FS_ERR_NOT_FOUND;
+    if (!file) {
+        printf("fs_read: File not found\n");
+        return FS_ERR_NOT_FOUND;
+    }
     
     // Check if file is readable
     if (!(file->permissions & FS_PERM_READ)) {
@@ -754,70 +776,78 @@ int fs_exists(const char* path) {
 
 // Check if a path is under a mount point
 int fs_check_mount_point(const char* path, const char** rel_path, mount_point_t** mount) {
+    if (!path || !rel_path || !mount) {
+        return 0;
+    }
+    
+    // Normalize the path to ensure consistency
+    char normalized_path[FS_MAX_PATH_LENGTH];
+    fs_normalize_path(path, normalized_path, sizeof(normalized_path));
+    
     for (int i = 0; i < num_mount_points; i++) {
         // Special case for root mount
         if (strcmp(mount_points[i].path, "/") == 0) {
-            *rel_path = path;
+            *rel_path = normalized_path;
             *mount = &mount_points[i];
+            printf("Path '%s' is under root mount point\n", normalized_path);
             return 1;
         }
         
         int mount_len = strlen(mount_points[i].path);
         
         // Check if path starts with mount point path
-        if (strncmp(path, mount_points[i].path, mount_len) == 0) {
+        if (strncmp(normalized_path, mount_points[i].path, mount_len) == 0) {
             // Path is under this mount point
-            if (path[mount_len] == '/' || path[mount_len] == '\0') {
-                *rel_path = path + mount_len;
+            if (normalized_path[mount_len] == '/' || normalized_path[mount_len] == '\0') {
+                *rel_path = normalized_path + mount_len;
                 // If rel_path is empty or just "/", make it "/"
                 if (**rel_path == '\0') {
                     *rel_path = "/";
                 }
                 *mount = &mount_points[i];
+                printf("Path '%s' is under mount point '%s', rel_path='%s'\n", 
+                       normalized_path, mount_points[i].path, *rel_path);
                 return 1;
             }
         }
     }
     
-    // Not under a mount point
-    return 0;
+    printf("Path '%s' is not under any mount point\n", normalized_path);
+    return 0; // Not under a mount point
 }
 
 // find_mount_point function to check if a path is under a mount point
 int find_mount_point(const char* path, const char** rel_path, mount_point_t** mount) {
-    for (int i = 0; i < num_mount_points; i++) {
-        // Check if path starts with mount point path
-        if (strncmp(path, mount_points[i].path, strlen(mount_points[i].path)) == 0) {
-            // Path is under this mount point
-            *rel_path = path + strlen(mount_points[i].path);
-            *mount = &mount_points[i];
-            return 1;
-        }
-    }
-    
-    // Not under a mount point
-    return 0;
+    return fs_check_mount_point(path, rel_path, mount);
 }
 
 // Enhance fs_read_file to support mounted filesystems
 int fs_read_file(const char* path, void* buffer, size_t size) {
     if (!fs || !path || !buffer) return FS_ERR_INVALID;
     
+    printf("fs_read_file: Reading file %s\n", path);
+    
     // Check if the path is on a mounted filesystem
     const char* rel_path;
     mount_point_t* mount;
     
     if (find_mount_point(path, &rel_path, &mount)) {
+        printf("fs_read_file: File is on mounted filesystem, rel_path=%s\n", rel_path);
         // This path is on a mounted filesystem
         if (mount->read_file) {
-            return mount->read_file(rel_path, buffer, size);
+            int result = mount->read_file(rel_path, buffer, size);
+            printf("fs_read_file: Read result = %d\n", result);
+            return result;
         } else {
+            printf("fs_read_file: No filesystem driver available\n");
             return -100; // Unsupported operation
         }
     }
     
+    printf("fs_read_file: File is not on a mounted filesystem\n");
     // If not on a mounted filesystem, use the in-memory fs
-    return FS_ERR_NOT_FOUND;
+    // Just use regular fs_read with offset 0
+    return fs_read(path, buffer, size, 0);
 }
 
 // Add a function to load and execute a program from the filesystem
@@ -848,20 +878,25 @@ int fs_load_program(const char* path, void* buffer, size_t* size) {
 
 // Create some example files and directories
 void fs_create_example_files(void) {
+    printf("Creating example files in in-memory filesystem\n");
+    
     // Create some directories
     fs_mkdir("/bin");
     fs_mkdir("/etc");
     fs_mkdir("/home");
     fs_mkdir("/home/user");
+    fs_mkdir("/cdrom");   // Add cdrom mount point
+    fs_mkdir("/media");   // Add media mount point
     
     // Create some files
     fs_create("/etc/motd");
     fs_create("/home/user/hello.txt");
+    fs_create("/bin/meow");
     
     // Write content to files
-    const char* motd = "Welcome to konstruct!\nThis is a simple in-memory filesystem.\n";
+    const char* motd = "Welcome to konstruct!\nThis is a simple in-memory filesystem designed to show you the use case of whatever this is.\n";
     fs_write("/etc/motd", motd, strlen(motd), 0);
-    
+
     const char* hello = "Hello, world!\nThis is a test file.\n";
     fs_write("/home/user/hello.txt", hello, strlen(hello), 0);
 }

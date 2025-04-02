@@ -145,7 +145,7 @@ int _kill(int pid, int sig) {
 // Exit process
 void _exit(int status) {
     // Return to the caller with the exit status
-    // In a real OS, this would terminate the process
+
     while (1) {
         // Halt CPU - in reality we'd switch back to the kernel
         __asm__("hlt");

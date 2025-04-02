@@ -34,12 +34,12 @@ void idt_set_gate(uint8_t num, uint32_t base, uint16_t selector, uint8_t flags) 
     idt_entries[num].offset_high = ((base >> 16) & 0xFFFF);
 }
 
-// This function would be implemented in assembly
+
 void idt_load(idt_descriptor_t* idt_desc) {
     asm volatile("lidt (%0)" : : "r" (idt_desc));
 }
 
-// This would be implemented in assembly - placeholder
+
 void syscall_handler(void) {
 
     asm volatile(

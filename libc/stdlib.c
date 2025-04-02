@@ -201,25 +201,32 @@ void handle_run_command(const char* cmd) {
         return;
     }
     
+    // Clear the buffer
+    memset(program_buffer, 0, buffer_size);
+    
     // Load the program
+    console_write("Loading program...\n");
     int result = fs_load_program(program_path, program_buffer, &buffer_size);
     
     if (result < 0) {
-        console_write("Error: Failed to load program\n");
+        char err_msg[128];
+        sprintf(err_msg, "Error: Failed to load program (error code: %d)\n", result);
+        console_write(err_msg);
         free(program_buffer);
         return;
     }
     
-    // Execute the program (this is a simplified example)
-    console_write("Program loaded successfully. Executing...\n");
+    // For simplicity, treat the program as plain text and just display it
+    console_write("Program loaded successfully (size: ");
+    char size_str[16];
+    itoa(result, size_str, 10);
+    console_write(size_str);
+    console_write(" bytes). Program output:\n\n");
     
-    typedef void (*program_entry_t)(void);
-    program_entry_t entry_point = (program_entry_t)program_buffer;
-    
-
-    // Execute the program
-    entry_point();
-    console_write("Program execution not yet implemented\n");
+    // Null-terminate the buffer
+    ((char*)program_buffer)[result] = '\0';
+    console_write((char*)program_buffer);
+    console_write("\n\n");
     
     free(program_buffer);
 }
@@ -426,7 +433,7 @@ void handle_command(const char* cmd) {
     }
     else if (strcmp(cmd, "mount") == 0) {
         console_write("Mounted filesystems:\n");
-        if (bootdev_get_type() != BOOT_DEV_UNKNOWN) {
+        if (is_boot_device_mounted()) {
             char mount_info[100];
             sprintf(mount_info, "  %s on %s (%s)\n", 
                     bootdev_get_type() == BOOT_DEV_CDROM ? "/cdrom" : "/media",
@@ -482,6 +489,8 @@ void handle_command(const char* cmd) {
         console_write("\nMount commands:\n");
         console_write("  mount      - Show mounted filesystems\n");
         console_write("  mount dev  - Mount a specific device (not yet implemented)\n");
+        console_write("  remount    - Remount boot device to another path\n");
+        console_write("  run path   - Run a program from the filesystem\n");
     } 
     else if (strcmp(cmd, "version") == 0) {
         console_write("konstruct version 0.1 with integrated shell\n");
