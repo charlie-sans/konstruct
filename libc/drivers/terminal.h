@@ -99,3 +99,11 @@ void terminal_get_default_theme(terminal_theme_t* theme);
 // extern const terminal_theme_t THEME_RETRO;
 
 #endif // TERMINAL_H
+
+// Low-level port I/O (implemented in kernel or platform code)
+extern unsigned char inb(unsigned short port);
+extern void outb(unsigned short port, unsigned char data);
+
+// Draw header/footer functions
+void terminal_draw_header(void);
+void terminal_draw_footer(void);

@@ -2,6 +2,7 @@
 #define FS_H
 
 #include "../libc/libc.h"
+#include "bootdev.h"
 
 // Define time_t since we don't have standard library
 typedef unsigned long time_t;
@@ -79,6 +80,17 @@ int fs_create(const char* path);
 int fs_delete(const char* path);
 int fs_read(const char* path, void* buffer, size_t size, size_t offset);
 int fs_write(const char* path, const void* buffer, size_t size, size_t offset);
+
+// Mount point structure
+typedef struct {
+    char path[FS_MAX_PATH_LENGTH];
+    boot_device_type_t type;
+    int (*read_file)(const char* path, void* buffer, size_t size);
+    int (*list_directory)(const char* path, char* buffer, size_t size);
+} mount_point_t;
+
+// Mount point check
+int fs_check_mount_point(const char* path, const char** rel_path, mount_point_t** mount);
 int fs_getsize(const char* path);
 
 // Load and execute a program from the filesystem

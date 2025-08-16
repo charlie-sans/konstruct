@@ -9,6 +9,7 @@ typedef enum {
     BOOT_DEV_FLOPPY,
     BOOT_DEV_HDD,
     BOOT_DEV_CDROM,
+    BOOT_DEV_USB,
     BOOT_DEV_MEMORY  // For testing/simulation
 } boot_device_type_t;
 
@@ -28,6 +29,10 @@ typedef struct {
 #define BOOTDEV_ERROR_INVALID    3
 #define BOOTDEV_ERROR_UNSUPPORTED 4
 #define BOOTDEV_ERROR_READ      5
+
+#define BOOTDEV_ERROR_UNKNOWN           6
+#define BOOTDEV_ERROR_NOT_INITIALIZED   7
+#define BOOTDEV_ERROR_NOT_MOUNTED       8
 
 // External variable declarations
 extern uint32_t mboot_drive_number;

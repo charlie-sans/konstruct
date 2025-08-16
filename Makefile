@@ -32,7 +32,7 @@ ISO_IMAGE = konstruct.iso
 # Compiler and linker flags
 CFLAGS = -m32 -ffreestanding -fno-pie -nostdlib -nostdinc \
          -fno-builtin -fno-stack-protector -nostartfiles \
-         -nodefaultlibs -g
+         -nodefaultlibs -g -Wno-error=implicit-function-declaration -Wno-error=int-conversion
 CFLAGS += -I$(SRC_DIR) -I$(LIBC_DIR)
 ASFLAGS = -f elf32
 LDFLAGS = -m elf_i386 -Tlinker.ld

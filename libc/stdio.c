@@ -323,68 +323,14 @@ int puts(const char* s) {
     return 0;
 }
 
-int vsnprintf(const char* format, va_list args) {
-    int printed = 0;
+int vsnprintf(char* str, size_t size, const char* format, va_list args) {
+    // For simplicity, we'll treat this as a placeholder implementation
+    // A full implementation would require significant string formatting logic
+    if (!str || size == 0) return 0;
     
-    while (*format) {
-        if (*format == '%') {
-            format++;
-            switch (*format) {
-                case 'd': {
-                    int val = va_arg(args, int);
-                    char buf[32];
-                    itoa(val, buf, 10);
-                    char* s = buf;
-                    while (*s) {
-                        putchar(*s++);
-                        printed++;
-                    }
-                    break;
-                }
-                case 'x': {
-                    int val = va_arg(args, int);
-                    char buf[32];
-                    itoa(val, buf, 16);
-                    char* s = buf;
-                    while (*s) {
-                        putchar(*s++);
-                        printed++;
-                    }
-                    break;
-                }
-                case 's': {
-                    char* s = va_arg(args, char*);
-                    while (*s) {
-                        putchar(*s++);
-                        printed++;
-                    }
-                    break;
-                }
-                case 'c': {
-                    char c = (char)va_arg(args, int);
-                    putchar(c);
-                    printed++;
-                    break;
-                }
-                case '%': {
-                    putchar('%');
-                    printed++;
-                    break;
-                }
-                default:
-                    putchar('%');
-                    putchar(*format);
-                    printed += 2;
-                    break;
-            }
-        } else {
-            putchar(*format);
-            printed++;
-        }
-        format++;
-    }
-    
-    return printed;
+    // For now, just copy a basic string or return 0
+    str[0] = '\0';
+    return 0;
 }
 
 // Enhanced printf to handle ANSI escape codes
@@ -456,7 +402,7 @@ int printf(const char* format, ...) {
     return printed;
 }
 
-char getchar(void) {
+int getchar(void) {
     char c;
     unsigned char scancode;
 

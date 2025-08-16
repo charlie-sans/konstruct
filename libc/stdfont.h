@@ -183,6 +183,22 @@ uint32_t bmp_get_pixel(const uint8_t* data, int x, int y);
 Font* bmp_to_font(const uint8_t* bmp_data, int char_width, int char_height, 
                  char first_char, int chars_per_row, uint8_t* out_data, size_t out_size);
 
+/**
+ * Load a font directly from BMP data stored in memory.
+ *
+ * @param bmp_data Pointer to BMP image data
+ * @param bmp_size Size of the BMP data in bytes
+ * @param char_width Width of each character in pixels
+ * @param char_height Height of each character in pixels
+ * @param first_char ASCII value of the first character in the BMP
+ * @return Pointer to a newly allocated Font on success, or NULL on failure
+ */
+Font* load_font_from_bmp(const uint8_t* bmp_data, size_t bmp_size, 
+                         int char_width, int char_height, char first_char);
+
+// Retrieve a previously-loaded custom BMP font (if any)
+Font* get_custom_bmp_font(void);
+
 
 #ifdef FONT_IMPLEMENTATION
 // 8x8 default font data - Simple ASCII font

@@ -9,13 +9,6 @@ filesystem_t* fs = NULL;
 // Add mount point tracking
 #define MAX_MOUNT_POINTS 10
 
-typedef struct {
-    char path[FS_MAX_PATH_LENGTH];
-    boot_device_type_t type;
-    int (*read_file)(const char* path, void* buffer, size_t size);
-    int (*list_directory)(const char* path, char* buffer, size_t size);
-} mount_point_t;
-
 static mount_point_t mount_points[MAX_MOUNT_POINTS];
 static int num_mount_points = 0;
 

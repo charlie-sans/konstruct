@@ -41,6 +41,7 @@ typedef int pid_t;
 
 // Memory functions
 void* memcpy(void* dest, const void* src, size_t n);
+void* memmove(void* dest, const void* src, size_t n);
 void* memset(void* s, int c, size_t n);
 void* malloc(size_t size);
 void free(void* ptr);
@@ -74,12 +75,15 @@ int printf(const char* format, ...);
 int sprintf(char* str, const char* format, ...);
 int snprintf(char* str, size_t size, const char* format, ...);
 int vprintf(const char* format, va_list args);
-char getchar(void);
+int getchar(void);
 char* gets(char* str);
+
+int vsnprintf(char* str, size_t size, const char* format, va_list args);
 
 // Conversion functions
 int atoi(const char* str);
 char* itoa(int value, char* str, int base);
+void int_to_string(int value, char* str, int base);
 
 // Math functions
 int abs(int x);
@@ -88,5 +92,8 @@ double sqrt(double x);
 
 // Keyboard input functions
 char scancode_to_ascii(unsigned char scancode);
+
+// Cursor control
+void update_cursor(int x, int y);
 
 #endif /* LIBC_H */

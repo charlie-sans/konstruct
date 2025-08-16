@@ -6,7 +6,7 @@
 
 // Character input and output functions
 int putchar(int c);
-char getchar(void);
+int getchar(void);
 int puts(const char* s);
 char* gets(char* str);
 
@@ -14,7 +14,7 @@ char* gets(char* str);
 int printf(const char* format, ...);
 int sprintf(char* str, const char* format, ...);
 int snprintf(char* str, size_t size, const char* format, ...);
-int vsnprintf(const char* format, va_list args);
+int vsnprintf(char* str, size_t size, const char* format, va_list args);
 
 // String conversion functions
 int atoi(const char* str);
