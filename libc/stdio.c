@@ -1,23 +1,31 @@
 #include <libc.h>
 #include <stddef.h>
+#include "stdio.h"
 
 #include <globals.h>
 #include "drivers/serial.h"
+#include "../debug.h"
 #define screen_width 80
 #define screen_height 25
 
 char scancode_to_ascii(unsigned char scancode) {
     static int shift_pressed = 0;
     static int caps_lock_enabled = 0;
+    static int ctrl_pressed = 0;
+    static int alt_pressed = 0;
 
     // Handle key releases first (scancodes with high bit set)
     if (scancode & 0x80) {
         // Key release - high bit set
         unsigned char released_key = scancode & 0x7F; // Clear the high bit to get the key code
         
-        // Handle shift key release
+        // Handle modifier key releases
         if (released_key == 0x2A || released_key == 0x36) {
             shift_pressed = 0;
+        } else if (released_key == 0x1D) {
+            ctrl_pressed = 0;
+        } else if (released_key == 0x38) {
+            alt_pressed = 0;
         }
         
         return 0; // No character output for key releases
@@ -34,6 +42,16 @@ char scancode_to_ascii(unsigned char scancode) {
     } else if (scancode == 0xE0) { // Extended key prefix
         return 0;
     } else if (scancode == 0x1D) { // Control key press
+        ctrl_pressed = 1;
+        return 0;
+    } else if (scancode == 0x38) { // Alt key press
+        alt_pressed = 1;
+        return 0;
+    }
+    
+    // Check for dangerous key combinations that might cause reboot
+    if (ctrl_pressed && alt_pressed && scancode == 0x53) { // Ctrl+Alt+Del
+        // Ignore this combination for now to prevent accidental reboots
         return 0;
     }
 
@@ -405,17 +423,32 @@ int printf(const char* format, ...) {
 int getchar(void) {
     char c;
     unsigned char scancode;
+    int iteration_count = 0;
+
+    debug_print(DEBUG_INFO, "getchar() called - waiting for keyboard input\n");
+    debug_keyboard_state();
 
     // Keep reading scancodes until we get a valid character
     while (1) {
+        iteration_count++;
+        
+        // Add debug output every 1000 iterations to see if we're stuck
+        if (iteration_count % 1000 == 0) {
+            debug_print(DEBUG_WARN, "getchar() iteration %d - still waiting\n", iteration_count);
+            debug_keyboard_state();
+        }
+        
         // Wait for a scan code 
         scancode = read_scan_code();
+        debug_print(DEBUG_VERBOSE, "Read scancode: 0x%02X\n", scancode);
         
         // Convert to ASCII and check if it's a printable character
         c = scancode_to_ascii(scancode);
+        debug_print(DEBUG_VERBOSE, "Converted to ASCII: 0x%02X ('%c')\n", c, c ? c : '?');
         
         // If we got a printable character, return it
         if (c != 0) {
+            debug_print(DEBUG_INFO, "getchar() returning: '%c' (0x%02X)\n", c, c);
             return c;
         }
         

@@ -33,33 +33,26 @@ int fat_init(boot_device_t* dev);
 
 // Initialize the boot device
 int bootdev_init(void) {
-    printf("bootdev_init: Detecting boot device...\n");
-    
+    // Simplified boot device detection - assume CD-ROM for now
     // For now, always assume it's a CDROM (for testing)
     boot_device_type = BOOT_DEV_CDROM;
     boot_device_initialized = 1;
     
     // Initialize the appropriate filesystem
     if (boot_device_type == BOOT_DEV_CDROM) {
-        printf("bootdev_init: Initializing ISO9660 filesystem\n");
         int result = iso9660_init(&boot_device);
         if (result != BOOTDEV_SUCCESS) {
-            printf("bootdev_init: ISO9660 initialization failed\n");
             return result;
         }
     } else if (boot_device_type == BOOT_DEV_FLOPPY) {
-        printf("bootdev_init: Initializing FAT filesystem\n");
         int result = fat_init(&boot_device);
         if (result != BOOTDEV_SUCCESS) {
-            printf("bootdev_init: FAT initialization failed\n");
             return result;
         }
     } else {
-        printf("bootdev_init: Unknown boot device type\n");
         return BOOTDEV_ERROR_UNKNOWN;
     }
     
-    printf("bootdev_init: Boot device initialized successfully\n");
     return BOOTDEV_SUCCESS;
 }
 
@@ -116,14 +109,4 @@ const char* bootdev_get_type_name(void) {
         default:
             return "Unknown";
     }
-}
-
-// Check if boot device is mounted
-int is_boot_device_mounted(void) {
-    return boot_device_mounted;
-}
-
-// Set boot device mounted status (for global access)
-void set_boot_device_mounted(int status) {
-    boot_device_mounted = status;
 }

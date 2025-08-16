@@ -1,9 +1,11 @@
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include "stdio.h"
+#include "stdlib.h"
+#include "../debug.h"
 #include <globals.h>
 #include <drivers/serial.h>
 #include "drivers/bios.h"
+#include "drivers/keyboard.h"
 #include "../globals.h" // Add this include near the top of the file, with your other includes
 #include "fs/fs.h"
 #include "fs/bootdev.h"  // Add this include for bootdev functions
@@ -11,10 +13,22 @@
 // Use the clear_screen function from stdio.c
 extern void clear_screen(void);
 
+#include "stdio.h"
+#include "stdlib.h"
+#include "../debug.h"
+#include "drivers/keyboard.h"
+
+// Keyboard controller ports
+#define KEYBOARD_DATA_PORT    0x60
+#define KEYBOARD_STATUS_PORT  0x64
+
 // Function to read a scan code from the keyboard
 unsigned char read_scan_code(void) {
-    // Wait for a key to be pressed
-    while (!(inb(KEYBOARD_STATUS_PORT) & 1));
+    // Simple direct port access - no debug output to avoid crashes
+    while (!(inb(KEYBOARD_STATUS_PORT) & 1)) {
+        // Wait for keyboard data to be available
+        for (volatile int i = 0; i < 100; i++);  // Small delay
+    }
     return inb(KEYBOARD_DATA_PORT);
 }
 

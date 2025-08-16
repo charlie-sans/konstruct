@@ -1,0 +1,64 @@
+#include "console.h"
+#include "serial.h"
+#include "../libc.h"
+
+// Console modes
+static int console_mode = CONSOLE_MODE_VGA;
+
+void console_init(void) {
+    // Initialize serial port for console output
+    serial_init(SERIAL_COM1_BASE);
+    
+    // Try to detect if we're in a serial console environment
+    // For now, default to VGA but allow switching
+    console_mode = CONSOLE_MODE_VGA;
+}
+
+void console_set_mode(int mode) {
+    console_mode = mode;
+}
+
+int console_getchar(void) {
+    switch (console_mode) {
+        case CONSOLE_MODE_SERIAL:
+            return serial_read_char(SERIAL_COM1_BASE);
+        case CONSOLE_MODE_VGA:
+        default:
+            return getchar(); // Use standard VGA keyboard input
+    }
+}
+
+void console_putchar(int c) {
+    switch (console_mode) {
+        case CONSOLE_MODE_SERIAL:
+            serial_write_char(SERIAL_COM1_BASE, c);
+            break;
+        case CONSOLE_MODE_VGA:
+        default:
+            putchar(c);
+            break;
+    }
+    
+    // Always output to serial for debugging
+    if (console_mode != CONSOLE_MODE_SERIAL) {
+        serial_write_char(SERIAL_COM1_BASE, c);
+    }
+}
+
+void console_puts(const char* str) {
+    while (*str) {
+        console_putchar(*str);
+        str++;
+    }
+}
+
+void console_printf(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    
+    char buffer[1024];
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    console_puts(buffer);
+    
+    va_end(args);
+}

@@ -9,7 +9,7 @@ typedef struct {
     char name[32];
     char path[256];
     size_t size;
-    char* data;
+    char data[512];  // Use static buffer instead of dynamic allocation
     int is_directory;
 } iso9660_file_t;
 
@@ -19,8 +19,7 @@ static int num_iso_files = 0;
 
 // Initialize ISO9660 filesystem
 int iso9660_init(boot_device_t* dev) {
-    printf("Initializing ISO9660 filesystem...\n");
-    
+    // Simple initialization without verbose output
     // Clear existing files
     memset(iso_files, 0, sizeof(iso_files));
     num_iso_files = 0;
@@ -45,28 +44,28 @@ int iso9660_init(boot_device_t* dev) {
     iso_files[num_iso_files].is_directory = 0;
     strcpy(iso_files[num_iso_files].name, "hello.txt");
     strcpy(iso_files[num_iso_files].path, "/hello.txt");
-    iso_files[num_iso_files].data = strdup("Hello from CD-ROM filesystem!\n");
+    strcpy(iso_files[num_iso_files].data, "Hello from CD-ROM filesystem!\n");
     iso_files[num_iso_files].size = strlen(iso_files[num_iso_files].data);
     num_iso_files++;
     
     iso_files[num_iso_files].is_directory = 0;
     strcpy(iso_files[num_iso_files].name, "readme.txt");
     strcpy(iso_files[num_iso_files].path, "/readme.txt");
-    iso_files[num_iso_files].data = strdup("This is a simulated ISO9660 filesystem for development purposes.\n");
+    strcpy(iso_files[num_iso_files].data, "This is a simulated ISO9660 filesystem for development purposes.\n");
     iso_files[num_iso_files].size = strlen(iso_files[num_iso_files].data);
     num_iso_files++;
     
     iso_files[num_iso_files].is_directory = 0;
     strcpy(iso_files[num_iso_files].name, "version.txt");
     strcpy(iso_files[num_iso_files].path, "/etc/version.txt");
-    iso_files[num_iso_files].data = strdup("konstruct OS v0.1\n");
+    strcpy(iso_files[num_iso_files].data, "konstruct OS v0.1\n");
     iso_files[num_iso_files].size = strlen(iso_files[num_iso_files].data);
     num_iso_files++;
     
     iso_files[num_iso_files].is_directory = 0;
     strcpy(iso_files[num_iso_files].name, "hello");
     strcpy(iso_files[num_iso_files].path, "/bin/hello");
-    iso_files[num_iso_files].data = strdup("#!/bin/sh\necho Hello World\n");
+    strcpy(iso_files[num_iso_files].data, "#!/bin/sh\necho Hello World\n");
     iso_files[num_iso_files].size = strlen(iso_files[num_iso_files].data);
     num_iso_files++;
     
@@ -75,12 +74,11 @@ int iso9660_init(boot_device_t* dev) {
     strcpy(iso_files[num_iso_files].path, "/programs/test.prog");
     
     // Create a simple program that outputs text
-    char prog_data[] = "Program loaded and executed successfully!\n";
-    iso_files[num_iso_files].data = strdup(prog_data);
+    strcpy(iso_files[num_iso_files].data, "Program loaded and executed successfully!\n");
     iso_files[num_iso_files].size = strlen(iso_files[num_iso_files].data);
     num_iso_files++;
     
-    printf("ISO9660 filesystem initialized with %d files\n", num_iso_files);
+    // Initialization complete - reduced output to avoid early boot issues
     return BOOTDEV_SUCCESS;
 }
 
@@ -101,20 +99,16 @@ int iso9660_read_file(const char* path, void* buffer, size_t size) {
     char normalized_path[256];
     normalize_path(path, normalized_path, sizeof(normalized_path));
     
-    printf("iso9660_read_file: Reading %s\n", normalized_path);
-    
     // Find the file
     for (int i = 0; i < num_iso_files; i++) {
         if (!iso_files[i].is_directory && strcmp(iso_files[i].path, normalized_path) == 0) {
             // Found the file
             size_t copy_size = size < iso_files[i].size ? size : iso_files[i].size;
             memcpy(buffer, iso_files[i].data, copy_size);
-            printf("iso9660_read_file: Read %d bytes from %s\n", (int)copy_size, normalized_path);
             return copy_size;
         }
     }
     
-    printf("iso9660_read_file: File not found: %s\n", normalized_path);
     return -1; // File not found
 }
 
@@ -122,8 +116,6 @@ int iso9660_read_file(const char* path, void* buffer, size_t size) {
 int iso9660_list_directory(const char* path, char* buffer, size_t size) {
     char normalized_path[256];
     normalize_path(path, normalized_path, sizeof(normalized_path));
-    
-    printf("iso9660_list_directory: Listing %s\n", normalized_path);
     
     // Special case for root directory
     if (strcmp(normalized_path, "/") == 0 || strcmp(normalized_path, "") == 0) {
@@ -141,11 +133,9 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
                     offset += snprintf(buffer + offset, size - offset, "%s\n", iso_files[i].name);
                 }
                 file_count++;
-                printf("  Found root item: %s\n", iso_files[i].name);
             }
         }
         
-        printf("iso9660_list_directory: Listed root directory with %d items\n", file_count);
         return file_count; // Return the number of files found
     }
     
@@ -154,13 +144,11 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
     for (int i = 0; i < num_iso_files; i++) {
         if (iso_files[i].is_directory && strcmp(iso_files[i].path, normalized_path) == 0) {
             dir_exists = 1;
-            printf("  Found directory: %s\n", normalized_path);
             break;
         }
     }
     
     if (!dir_exists) {
-        printf("iso9660_list_directory: Directory not found: %s\n", normalized_path);
         return -1; // Directory not found
     }
     
@@ -192,10 +180,8 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
                 offset += snprintf(buffer + offset, size - offset, "%s\n", name);
             }
             file_count++;
-            printf("  Found item in directory: %s\n", name);
         }
     }
     
-    printf("iso9660_list_directory: Listed directory %s with %d items\n", normalized_path, file_count);
     return file_count; // Return the number of files found
 }

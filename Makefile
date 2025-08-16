@@ -42,6 +42,7 @@ LIBC_LIB = $(LIBC_DIR)/libc.a
 
 # Source files
 C_SRC = $(wildcard $(SRC_DIR)/kernel.c) \
+        $(wildcard $(SRC_DIR)/debug.c) \
         $(wildcard $(DRIVERS_DIR)/*.c) \
         $(wildcard $(FS_DIR)/*.c) \
         $(wildcard $(ELF_DIR)/*.c) \
@@ -115,7 +116,7 @@ $(ISO_IMAGE): $(KERNEL_ELF) $(GRUB_CFG)
 	cp $(KERNEL_ELF) $(ISO_DIR)/boot/kernel.elf
 	cp $(GRUB_CFG) $(ISO_DIR)/boot/grub/
 	mkdir -p $(ISO_DIR)/boot/grub/Particle
-	cp -r $(GRUB_THEME_DIR)/ $(ISO_DIR)/boot/grub/Particle
+	-cp -r $(GRUB_THEME_DIR)/ $(ISO_DIR)/boot/grub/Particle
 	grub-mkrescue -o $(ISO_IMAGE) $(ISO_DIR)
 
 # Run in QEMU

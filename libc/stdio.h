@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <libc.h>
 
+// Standard constants
+#define EOF (-1)
+
 // Character input and output functions
 int putchar(int c);
 int getchar(void);

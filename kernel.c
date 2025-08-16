@@ -1,29 +1,11 @@
-//unit8_t
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
+#include "libc/drivers/simple_console.h"
+#include "libc/drivers/keyboard.h"
+#include "libc/fs/fs.h"
+#include "libc/libc.h"
 
-// Include our libc
-#include <libc.h>
-
-// Include VGA driver
-#include <drivers/vga.h>
-
-// Include filesystem
-#include <fs/fs.h>
-
-// Include enhanced terminal
-#include <drivers/terminal.h>
-
-// Include boot device handler
-#include <fs/bootdev.h>
-
-#include "kernel.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-
-// Define globals directly in kernel.c if linking isn't working
+// Function prototypes
+unsigned char read_scan_code(void);
+char scancode_to_ascii(unsigned char scancode);
 
 // Multiboot header
 __attribute__((section(".multiboot")))
@@ -32,100 +14,73 @@ const unsigned int multiboot_header[] = {
     0x0,        // Flags (no video mode, no additional info)
     -(0x1BADB002 + 0x0) // Checksum (magic + flags + checksum = 0)
 };
-// External BMP font functions
-extern void bmp_font_init(void);
-extern Font* get_custom_bmp_font(void);
-extern void bmp_font_cleanup(void);
 
-// Function prototypes
-void clear_screen(void);
-void print_char(char c);
-void print_string(const char* str);
-void kernel_putchar(char c);
-void shell_main(void);
-void handle_command(const char* cmd);
-unsigned char read_scan_code(void);
-char scancode_to_ascii(unsigned char scancode);
-unsigned char inb(unsigned short port);
-void outb(unsigned short port, unsigned char data);
-void update_cursor(int x, int y);
-int set_vbe_mode(int width, int height, int bpp);
-void reboot(void);
-void soft_reboot(void);
-void handle_run_command(const char* cmd);
-
-// Ensure this function is properly declared for external linking
-char scancode_to_ascii(unsigned char scancode);
-
-// Kernel main function
+// Simple kernel entry point
 void kernel_main(void) {
-    // Initialize VGA subsystem
-    vga_init();
+    // Write directly to VGA memory to confirm we're running
+    char* vga = (char*)0xB8000;
+    vga[0] = 'K'; vga[1] = 0x07;
+    vga[2] = 'O'; vga[3] = 0x07;
+    vga[4] = 'N'; vga[5] = 0x07;
+    vga[6] = 'S'; vga[7] = 0x07;
+    vga[8] = 'T'; vga[9] = 0x07;
+    vga[10] = 'R'; vga[11] = 0x07;
+    vga[12] = 'U'; vga[13] = 0x07;
+    vga[14] = 'C'; vga[15] = 0x07;
+    vga[16] = 'T'; vga[17] = 0x07;
     
-    // Initialize font system
-    font_init();
+    // Initialize console
+    simple_console_init();
+    simple_console_print("konstruct kernel starting...\n");
     
-    // Initialize BMP font
-    bmp_font_init();
+    // Initialize keyboard
+    simple_console_print("Initializing keyboard...\n");
+    keyboard_init();
+    simple_console_print("Keyboard initialized\n");
     
-    // Initialize filesystem
-    fs_init();
+    // Simple key echo test - just echo whatever key is pressed
+    simple_console_print("Key echo test - press keys to see them echoed\n");
+    simple_console_print("Press ESC to exit\n");
     
-    // Print a welcome message
-    clear_screen();
-    print_string("Welcome to konstruct with VGA Graphics, BMP Fonts, and Filesystem!\n");
-    print_string("Type 'help' for a list of commands.\n");
-
-    // Start the shell
-    shell_main();
-
-    // Clean up resources
-    fs_cleanup();
-    bmp_font_cleanup();
-
-    // Halt the CPU
     while (1) {
-        __asm__("hlt");
-    }
-}
-
-
-// Shell main function
-void shell_main(void) {
-    char cmd_buffer[CMD_BUFFER_SIZE];
-    
-    // Initialize enhanced terminal
-    terminal_init();
-    
-    // Main command loop
-    while (1) {
-        // Display command prompt
-        terminal_print_prompt();
+        // Read scan code directly from keyboard
+        unsigned char scancode = read_scan_code();
         
-        // Read user command
-        terminal_readline(cmd_buffer, CMD_BUFFER_SIZE);
-        
-        // Skip empty commands
-        if (cmd_buffer[0] == '\0') {
-            continue;
+        if (scancode != 0) {
+            // Only process key press events (not release)
+            if (!(scancode & 0x80)) {
+                // Convert to ASCII
+                char ascii = scancode_to_ascii(scancode);
+                
+                if (ascii != 0) {
+                    // Echo the character
+                    simple_console_print("Got key: ");
+                    simple_console_putchar(ascii);
+                    simple_console_print(" (scancode: ");
+                    
+                    // Print scancode in hex
+                    if (scancode < 16) simple_console_putchar('0');
+                    char hex_chars[] = "0123456789ABCDEF";
+                    simple_console_putchar(hex_chars[scancode >> 4]);
+                    simple_console_putchar(hex_chars[scancode & 0xF]);
+                    
+                    simple_console_print(")\n");
+                    
+                    // Exit on ESC (scancode 1)
+                    if (scancode == 1) {
+                        simple_console_print("ESC pressed - exiting\n");
+                        break;
+                    }
+                } else {
+                    // Non-ASCII key
+                    simple_console_print("Non-ASCII key (scancode: ");
+                    if (scancode < 16) simple_console_putchar('0');
+                    char hex_chars[] = "0123456789ABCDEF";
+                    simple_console_putchar(hex_chars[scancode >> 4]);
+                    simple_console_putchar(hex_chars[scancode & 0xF]);
+                    simple_console_print(")\n");
+                }
+            }
         }
-        
-        // Handle the command
-        if (strcmp(cmd_buffer, "reboot") == 0) {
-            terminal_println("Rebooting...");
-            reboot();
-        } else if (strcmp(cmd_buffer, "softreboot") == 0) {
-            terminal_println("Performing soft reboot...");
-            soft_reboot();
-        }
-        else if (strcmp(cmd_buffer, "exit") == 0) {
-            terminal_println("Exiting shell...");
-            break; // Exit the shell loop
-        } else if (strcmp(cmd_buffer, "help") == 0) {
-    
-        } else {
- 
-        }
-        handle_command(cmd_buffer);
     }
 }
