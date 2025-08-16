@@ -69,7 +69,14 @@ static void fs_mount_init(void) {
             
             num_mount_points++;
             
-            printf("Mounted boot device at %s\n", mount_path);
+            printf("Mounted boot device at %s with %d mount points registered\n", mount_path, num_mount_points);
+            
+            // Add debug output for mount points
+            for (int i = 0; i < num_mount_points; i++) {
+                printf("Mount point %d: path=%s, type=%d, read_file=%p, list_directory=%p\n",
+                       i, mount_points[i].path, mount_points[i].type,
+                       mount_points[i].read_file, mount_points[i].list_directory);
+            }
         } else {
             printf("Failed to mount boot device (error code: %d)\n", mount_result);
         }
@@ -490,14 +497,28 @@ int fs_listdir(const char* path, char* buffer, size_t bufsize) {
     
     // Check if this path is under a mount point
     if (fs_check_mount_point(path, &rel_path, &mount)) {
-        printf("fs_listdir: Path is under mount point, using filesystem driver\n");
+        printf("fs_listdir: Path is under mount point '%s', rel_path='%s'\n", 
+               mount->path, rel_path);
+        
         // Use the mount point's list_directory function
         if (mount->list_directory) {
+            printf("fs_listdir: Calling filesystem driver list_directory function at %p\n", 
+                   mount->list_directory);
+            
+            // Clear the buffer before passing it to the driver
+            buffer[0] = '\0';
+            
             int result = mount->list_directory(rel_path, buffer, bufsize);
-            printf("fs_listdir: List result = %d\n", result);
-            return result >= 0 ? FS_SUCCESS : result;
+            printf("fs_listdir: List result = %d, buffer content: [%s]\n", result, buffer);
+            
+            // Ensure null termination of buffer
+            buffer[bufsize - 1] = '\0';
+            
+            return result > 0 ? result : FS_SUCCESS;
         } else {
-            printf("fs_listdir: No directory listing function available\n");
+            printf("fs_listdir: No directory listing function available for this mount point\n");
+            // Set a meaningful error message in the buffer
+            snprintf(buffer, bufsize, "Error: Filesystem driver does not support directory listing\n");
             return -100; // Unsupported operation
         }
     }
@@ -784,12 +805,18 @@ int fs_check_mount_point(const char* path, const char** rel_path, mount_point_t*
     char normalized_path[FS_MAX_PATH_LENGTH];
     fs_normalize_path(path, normalized_path, sizeof(normalized_path));
     
+    // Debug output
+    printf("fs_check_mount_point checking: '%s' (normalized to '%s')\n", path, normalized_path);
+    printf("Number of mount points: %d\n", num_mount_points);
+    
     for (int i = 0; i < num_mount_points; i++) {
+        printf("  Checking against mount point %d: '%s'\n", i, mount_points[i].path);
+        
         // Special case for root mount
         if (strcmp(mount_points[i].path, "/") == 0) {
             *rel_path = normalized_path;
             *mount = &mount_points[i];
-            printf("Path '%s' is under root mount point\n", normalized_path);
+            printf("  Path '%s' is under root mount point\n", normalized_path);
             return 1;
         }
         
@@ -805,14 +832,14 @@ int fs_check_mount_point(const char* path, const char** rel_path, mount_point_t*
                     *rel_path = "/";
                 }
                 *mount = &mount_points[i];
-                printf("Path '%s' is under mount point '%s', rel_path='%s'\n", 
+                printf("  MATCH! Path '%s' is under mount point '%s', rel_path='%s'\n", 
                        normalized_path, mount_points[i].path, *rel_path);
                 return 1;
             }
         }
     }
     
-    printf("Path '%s' is not under any mount point\n", normalized_path);
+    printf("  No match. Path '%s' is not under any mount point\n", normalized_path);
     return 0; // Not under a mount point
 }
 

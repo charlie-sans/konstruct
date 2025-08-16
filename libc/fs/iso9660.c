@@ -128,6 +128,7 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
     // Special case for root directory
     if (strcmp(normalized_path, "/") == 0 || strcmp(normalized_path, "") == 0) {
         size_t offset = 0;
+        int file_count = 0;
         
         // Build the directory listing
         for (int i = 0; i < num_iso_files; i++) {
@@ -139,11 +140,13 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
                 } else {
                     offset += snprintf(buffer + offset, size - offset, "%s\n", iso_files[i].name);
                 }
+                file_count++;
+                printf("  Found root item: %s\n", iso_files[i].name);
             }
         }
         
-        printf("iso9660_list_directory: Listed root directory\n");
-        return 0; // Success
+        printf("iso9660_list_directory: Listed root directory with %d items\n", file_count);
+        return file_count; // Return the number of files found
     }
     
     // Check if the directory exists
@@ -151,6 +154,7 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
     for (int i = 0; i < num_iso_files; i++) {
         if (iso_files[i].is_directory && strcmp(iso_files[i].path, normalized_path) == 0) {
             dir_exists = 1;
+            printf("  Found directory: %s\n", normalized_path);
             break;
         }
     }
@@ -163,24 +167,35 @@ int iso9660_list_directory(const char* path, char* buffer, size_t size) {
     // List the directory contents
     size_t offset = 0;
     size_t path_len = strlen(normalized_path);
+    int file_count = 0;
     
     for (int i = 0; i < num_iso_files; i++) {
         // Check if this file is in the target directory
-        if (strncmp(iso_files[i].path, normalized_path, path_len) == 0 &&
-            iso_files[i].path[path_len] == '/' &&
-            strchr(iso_files[i].path + path_len + 1, '/') == NULL) {
+        if (strncmp(iso_files[i].path, normalized_path, path_len) == 0) {
+            // Make sure we're looking at a direct child of the directory, not a deeper path
+            const char* remaining_path = iso_files[i].path + path_len;
             
-            // Extract just the filename
-            const char* name = iso_files[i].path + path_len + 1;
+            // Skip files that aren't direct children
+            if (path_len > 1 && remaining_path[0] != '/') continue;
+            if (path_len > 1 && strchr(remaining_path + 1, '/') != NULL) continue;
+            
+            // Skip the directory itself
+            if (strlen(remaining_path) <= 1) continue;
+            
+            // Extract just the filename (skip the leading '/')
+            const char* name = remaining_path;
+            if (name[0] == '/') name++;
             
             if (iso_files[i].is_directory) {
                 offset += snprintf(buffer + offset, size - offset, "%s/\n", name);
             } else {
                 offset += snprintf(buffer + offset, size - offset, "%s\n", name);
             }
+            file_count++;
+            printf("  Found item in directory: %s\n", name);
         }
     }
     
-    printf("iso9660_list_directory: Listed directory %s\n", normalized_path);
-    return 0; // Success
+    printf("iso9660_list_directory: Listed directory %s with %d items\n", normalized_path, file_count);
+    return file_count; // Return the number of files found
 }
